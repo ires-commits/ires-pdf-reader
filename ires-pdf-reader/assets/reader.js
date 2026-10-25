@@ -36,7 +36,7 @@ async function render(url,title,root,token){
  tabs.append(thumbsTab,outlineTab);sidebar.append(tabs,thumbList,outlineList);
  const viewport=el('div','ires-pdf-pages');const singlePage=el('div','ires-pdf-single-page');const canvas=el('canvas');const singleText=el('div','ires-pdf-text-layer');singlePage.append(canvas,singleText);viewport.append(singlePage);
  workspace.append(sidebar,viewport);content.append(toolbar,workspace);
- sidebarToggle.onclick=()=>{sidebar.hidden=!sidebar.hidden;sidebarToggle.setAttribute('aria-expanded',String(!sidebar.hidden));};
+ sidebarToggle.onclick=()=>{sidebar.hidden=!sidebar.hidden;sidebarToggle.setAttribute('aria-expanded',String(!sidebar.hidden));if(!sidebar.hidden&&typeof loadThumbnails==='function'&&thumbCount===0)loadThumbnails();};
  thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;};
  outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;};
  try{
@@ -58,21 +58,28 @@ async function render(url,title,root,token){
   const dpr=()=>Math.min(window.devicePixelRatio||1,2);
   let searchTerm='';
   function highlightText(layer){
-   layer.querySelectorAll('mark.ires-pdf-highlight').forEach(mark=>mark.replaceWith(document.createTextNode(mark.textContent)));
-   layer.normalize();
+   layer.querySelectorAll('.ires-pdf-match-overlay').forEach(node=>node.remove());
    if(!searchTerm)return;
-   const walker=document.createTreeWalker(layer,NodeFilter.SHOW_TEXT);
-   const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
-   nodes.forEach(node=>{
-    const value=node.nodeValue,lower=value.toLocaleLowerCase(),term=searchTerm.toLocaleLowerCase();
-    if(!lower.includes(term))return;
-    const frag=document.createDocumentFragment();let start=0,index;
-    while((index=lower.indexOf(term,start))!==-1){
-     if(index>start)frag.append(document.createTextNode(value.slice(start,index)));
-     const mark=el('mark','ires-pdf-highlight',value.slice(index,index+term.length));frag.append(mark);start=index+term.length;
-    }
-    if(start<value.length)frag.append(document.createTextNode(value.slice(start)));
-    node.replaceWith(frag);
+   const term=searchTerm.toLocaleLowerCase();
+   const spans=layer.querySelectorAll('span');
+   spans.forEach(span=>{
+    const walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);
+    const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+    nodes.forEach(node=>{
+     const value=node.nodeValue.toLocaleLowerCase();let start=0,index;
+     while((index=value.indexOf(term,start))!==-1){
+      const range=document.createRange();range.setStart(node,index);range.setEnd(node,index+term.length);
+      const bounds=layer.getBoundingClientRect();
+      for(const rect of range.getClientRects()){
+       if(!rect.width||!rect.height)continue;
+       const mark=el('div','ires-pdf-match-overlay');
+       mark.style.left=(rect.left-bounds.left)+'px';mark.style.top=(rect.top-bounds.top)+'px';
+       mark.style.width=rect.width+'px';mark.style.height=rect.height+'px';
+       layer.append(mark);
+      }
+      start=index+term.length;
+     }
+    });
    });
   }
   async function addTextLayer(pdfPage,holder,view,epoch){
@@ -81,6 +88,7 @@ async function render(url,title,root,token){
    layer.replaceChildren();layer.style.width=view.width+'px';layer.style.height=view.height+'px';
    const text=await pdfPage.getTextContent();
    if(token!==session||epoch!==modeEpoch||!layer.isConnected)return;
+   layer.style.setProperty('--scale-factor',String(view.scale));
    const task=pdfjs.renderTextLayer({textContentSource:text,container:layer,viewport:view,textDivs:[]});
    await task.promise;
    if(token===session&&epoch===modeEpoch)highlightText(layer);
@@ -173,7 +181,7 @@ async function render(url,title,root,token){
    moreThumbs.hidden=thumbCount>=doc.numPages;moreThumbs.disabled=false;thumbBusy=false;
   }
   thumbList.append(moreThumbs);moreThumbs.onclick=loadThumbnails;
-  loadThumbnails();
+  // Render thumbnails only when the user opens the sidebar.
   function appendOutline(items,parent,depth){
    items.forEach(item=>{
     const button=el('button','ires-pdf-outline-item',item.title||'Sezione');button.type='button';
