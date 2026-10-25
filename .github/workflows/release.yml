@@ -50,11 +50,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm pack pdfjs-dist@4.10.38 --pack-destination /tmp
+          npm pack pdfjs-dist@3.11.174 --pack-destination /tmp
           mkdir -p ires-pdf-reader/vendor/pdfjs
-          tar -xzf /tmp/pdfjs-dist-4.10.38.tgz -C /tmp package/build/pdf.mjs package/build/pdf.worker.mjs
-          cp /tmp/package/build/pdf.mjs ires-pdf-reader/vendor/pdfjs/pdf.mjs
-          cp /tmp/package/build/pdf.worker.mjs ires-pdf-reader/vendor/pdfjs/pdf.worker.mjs
+          tar -xzf /tmp/pdfjs-dist-3.11.174.tgz -C /tmp package/build/pdf.min.js package/build/pdf.worker.min.js
+          cp /tmp/package/build/pdf.mjs ires-pdf-reader/vendor/pdfjs/pdf.min.js
+          cp /tmp/package/build/pdf.worker.mjs ires-pdf-reader/vendor/pdfjs/pdf.worker.min.js
       - name: Build ZIP
         if: steps.check.outputs.publish == 'true'
         shell: bash
