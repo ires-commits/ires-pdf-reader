@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check required files
+      - name: Check required files and version
         shell: bash
         run: |
           set -euo pipefail
@@ -19,7 +19,9 @@ jobs:
           test -f ires-pdf-reader/includes/github-updater.php
           test -f ires-pdf-reader/assets/reader.css
           test -f ires-pdf-reader/assets/reader.js
-          grep -Fq 'Version: 1.2.0' ires-pdf-reader/ires-pdf-reader.php
+          VERSION="$(sed -nE 's/^ \* Version: ([0-9]+\.[0-9]+\.[0-9]+).*$/\1/p' ires-pdf-reader/ires-pdf-reader.php | head -n1)"
+          test -n "$VERSION"
+          grep -Fq "const VERSION='$VERSION';" ires-pdf-reader/ires-pdf-reader.php
       - name: Lint PHP
         run: find ires-pdf-reader -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Check JavaScript syntax
