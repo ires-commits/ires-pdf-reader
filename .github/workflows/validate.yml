@@ -1,0 +1,33 @@
+name: Validate plugin
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ires-pdf-reader/ires-pdf-reader.php
+          test -f ires-pdf-reader/includes/github-updater.php
+          test -f ires-pdf-reader/assets/reader.css
+          test -f ires-pdf-reader/assets/reader.js
+          grep -Fq 'Version: 1.2.0' ires-pdf-reader/ires-pdf-reader.php
+      - name: Lint PHP
+        run: find ires-pdf-reader -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Check JavaScript syntax
+        run: node --check ires-pdf-reader/assets/reader.js
+      - name: Check package structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -qr ires-pdf-reader.zip ires-pdf-reader
+          unzip -t ires-pdf-reader.zip
+          unzip -Z1 ires-pdf-reader.zip | grep -Fx 'ires-pdf-reader/ires-pdf-reader.php'
