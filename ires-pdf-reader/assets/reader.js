@@ -385,7 +385,33 @@ async function render(url,title,root,token){
    if(position)link.hash+='&start='+position.start.join(',')+'&end='+position.end.join(',');
    return link.href;
   }
-  passage.onclick=()=>{const text=selectedPassage();if(!text){window.alert('Seleziona prima un passaggio nel documento.');return;}copyValue(pageUrl(text),passage);};
+  passage.onclick=async()=>{
+   const text=selectedPassage();
+   if(!text){window.alert('Seleziona prima un passaggio nel documento.');return;}
+   const position=cachedPosition||capturePosition();
+   if(!position){window.alert('Non riesco a individuare la posizione della selezione. Riprova selezionando il testo nel PDF.');return;}
+   passage.disabled=true;
+   const originalLabel=passage.textContent;passage.textContent='Salvataggio…';
+   try{
+    if(!config.passageApi)throw Error('Servizio non disponibile');
+    const response=await fetch(config.passageApi,{
+     method:'POST',credentials:'same-origin',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({pdf:url,title,page:position.page,start:position.start,end:position.end,text})
+    });
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const data=await response.json();
+    if(!data.url||!/^https?:\/\//.test(data.url))throw Error('Risposta non valida');
+    await copyValue(data.url,passage);
+   }catch(error){
+    console.warn('IRES PDF Reader: salvataggio passaggio non riuscito',error);
+    window.alert('Il link breve non è disponibile. Verrà copiato un collegamento diretto come alternativa.');
+    await copyValue(pageUrl(text),passage);
+   }finally{
+    passage.disabled=false;
+    if(passage.textContent==='Salvataggio…')passage.textContent=originalLabel;
+   }
+  };
   cite.onclick=()=>{
    const selected=selectedPassage();
    const quotation=selected?'“'+selected+'” ':'';
