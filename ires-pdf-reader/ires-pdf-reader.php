@@ -89,7 +89,7 @@ final class IRES_PDF_Reader {
   wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/'),'passageApi'=>rest_url('ires-pdf-reader/v1/passages'),'translationApi'=>rest_url('ires-pdf-reader/v1/translate'),'translationRemote'=>!!get_option('ires_pdf_translation_endpoint','')]).';','before');
  }
  static function shortcode($atts) {
-  $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF'],$atts,'ires_pdf_reader');
+  $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF','citation'=>''],$atts,'ires_pdf_reader');
   $url=self::valid_pdf($a['url']);
   if(!$url){
    if(current_user_can('manage_options'))return '<span class="ires-pdf-error" role="alert">IRES PDF Reader: URL PDF non valido o dominio non autorizzato. Controlla l’indirizzo del file e il dominio configurato in WordPress.</span>';
@@ -97,7 +97,7 @@ final class IRES_PDF_Reader {
   }
   $page=add_query_arg(['ires_pdf_reader'=>'1','pdf'=>$url,'title'=>$a['title']],home_url('/'));
   $out='<span class="ires-pdf-actions">';
-  if($a['mode']!=='page')$out.='<button type="button" class="ires-pdf-open" data-pdf="'.esc_attr($url).'" data-title="'.esc_attr($a['title']).'">'.esc_html($a['label']).'</button>';
+  if($a['mode']!=='page')$out.='<button type="button" class="ires-pdf-open" data-pdf="'.esc_attr($url).'" data-title="'.esc_attr($a['title']).'" data-citation="'.esc_attr($a['citation']).'">'.esc_html($a['label']).'</button>';
   if($a['mode']!=='overlay')$out.='<a class="ires-pdf-page-link" href="'.esc_url($page).'">Apri a pagina intera</a>';
   return $out.'</span>';
  }
@@ -124,7 +124,24 @@ final class IRES_PDF_Reader {
    }
   }
   if(!$url)return $content;
-  return $content.'<section class="ires-pdf-integrated"><h3>Consulta la pubblicazione</h3>'.self::shortcode(['url'=>$url,'title'=>get_the_title($id)]).'</section>';
+  // The scientific repository may already provide its own Preview button.
+  // Never add duplicate reader controls in that case.
+  if(strpos($content,'ires-pdf-open')!==false||strpos($content,'ires-pdf-integrated')!==false)return $content;
+  $authors=[];
+  $terms=wp_get_post_terms($id,'autore',['fields'=>'names']);
+  if(!is_wp_error($terms)&&is_array($terms))$authors=$terms;
+  if(!$authors){
+   foreach(['autori','autore','authors'] as $key){
+    $value=get_post_meta($id,$key,true);
+    if(is_string($value)&&trim($value)!==''){$authors=[trim($value)];break;}
+   }
+  }
+  $year=get_the_date('Y',$id);
+  $citation=trim(implode(', ',$authors).($authors?' ':'').($year?'('.$year.'). ':'').get_the_title($id).'.');
+  $args=['url'=>$url,'title'=>get_the_title($id),'citation'=>$citation];
+  $args=apply_filters('ires_pdf_reader_publication_args',$args,$id);
+  if(!is_array($args))return $content;
+  return $content.'<section class="ires-pdf-integrated"><h3>Consulta la pubblicazione</h3>'.self::shortcode($args).'</section>';
  }
  static function preserve_shared_reader($redirect,$requested) {
   return (isset($_GET['ires_pdf_reader']) && $_GET['ires_pdf_reader']==='1') || isset($_GET['ires_passage']) ? false : $redirect;
