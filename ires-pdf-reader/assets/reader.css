@@ -60,3 +60,10 @@
 
 /* Research tools: local bookmarks and passage links */
 .ires-pdf-bookmarks-list[hidden]{display:none!important}.ires-pdf-bookmarks-list{padding:10px;overflow:auto}.ires-pdf-bookmark-row{display:flex;align-items:center;gap:4px;padding:5px 2px;border-bottom:1px solid #e3eaf0}.ires-pdf-bookmark-jump{flex:1;text-align:left;border:0;background:transparent;color:#175a7c;cursor:pointer;padding:8px;border-radius:6px;font-size:13px}.ires-pdf-bookmark-jump:hover{background:#eaf3f8}.ires-pdf-bookmark-remove{border:0;background:transparent;color:#9b3340;cursor:pointer;font-size:20px;padding:5px 10px}.ires-pdf-actions-group{flex-wrap:wrap}.ires-pdf-side-tabs button{min-width:0;font-size:12px}.ires-pdf-controls .ires-pdf-actions-group button{white-space:nowrap}
+
+/* v2.0.1: native vertical touch scrolling in continuous mode */
+.ires-pdf-pages.ires-pdf-touch-continuous{overflow-y:auto;overflow-x:auto;overscroll-behavior-y:contain;overflow-anchor:none;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+.ires-pdf-touch-continuous .ires-pdf-continuous{overflow-anchor:none}
+.ires-pdf-touch-continuous .ires-pdf-page-slot{overflow-anchor:none;touch-action:pan-y}
+.ires-pdf-touch-continuous .ires-pdf-text-layer{touch-action:pan-y}
+@media(max-width:720px){.ires-pdf-pages.ires-pdf-touch-continuous{padding:10px 4px;align-items:flex-start;justify-content:flex-start}.ires-pdf-touch-continuous .ires-pdf-continuous{margin:0 auto;min-width:0;width:max-content;max-width:none}.ires-pdf-touch-continuous .ires-pdf-page-slot{max-width:none}}
