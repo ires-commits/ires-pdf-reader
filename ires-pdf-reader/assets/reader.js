@@ -123,7 +123,7 @@ async function render(url,title,root,token){
    if(linkedText){
     const words=linkedText.trim().split(/\\s+/).filter(Boolean);
     if(!words.length)return;
-    const pattern=words.map(w=>w.replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')).join('\\s+');
+    const pattern=words.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\    const pattern=words.map(w=>w.replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')).join('\\s+');')).join('\\s+');
     let match;
     try{match=new RegExp(pattern,'iu').exec(normalized);}catch(_error){return;}
     if(!match)return;
