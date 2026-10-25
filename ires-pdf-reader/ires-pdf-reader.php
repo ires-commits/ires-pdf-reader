@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 2.1.1
+ * Version: 2.2.0
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -10,9 +10,14 @@
  */
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
+require_once __DIR__.'/includes/passage-store.php';
+register_activation_hook(__FILE__,['IRES_PDF_Passage_Store','install']);
 final class IRES_PDF_Reader {
- const VERSION='2.1.1';
+ const VERSION='2.2.0';
  static function init() {
+  add_action('init',function(){if(get_option('ires_pdf_passage_schema')!=='1')IRES_PDF_Passage_Store::install();});
+  add_action('rest_api_init',['IRES_PDF_Passage_Store','routes']);
+  add_action('template_redirect',['IRES_PDF_Passage_Store','redirect'],-1);
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
   add_action('template_redirect',[__CLASS__,'dedicated'],0);
@@ -74,7 +79,7 @@ final class IRES_PDF_Reader {
   wp_enqueue_style('ires-pdf-reader',plugins_url('assets/reader.css',__FILE__),[],self::VERSION);
   wp_enqueue_script('ires-pdf-reader-pdfjs',plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),[],self::VERSION,true);
   wp_enqueue_script('ires-pdf-reader',plugins_url('assets/reader.js',__FILE__),['ires-pdf-reader-pdfjs'],self::VERSION,true);
-  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/')]).';','before');
+  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/'),'passageApi'=>rest_url('ires-pdf-reader/v1/passages')]).';','before');
  }
  static function shortcode($atts) {
   $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF'],$atts,'ires_pdf_reader');
@@ -115,7 +120,7 @@ final class IRES_PDF_Reader {
   return $content.'<section class="ires-pdf-integrated"><h3>Consulta la pubblicazione</h3>'.self::shortcode(['url'=>$url,'title'=>get_the_title($id)]).'</section>';
  }
  static function preserve_shared_reader($redirect,$requested) {
-  return isset($_GET['ires_pdf_reader']) && $_GET['ires_pdf_reader']==='1' ? false : $redirect;
+  return (isset($_GET['ires_pdf_reader']) && $_GET['ires_pdf_reader']==='1') || isset($_GET['ires_passage']) ? false : $redirect;
  }
  static function dedicated() {
   if(!isset($_GET['ires_pdf_reader'])||$_GET['ires_pdf_reader']!=='1')return;
