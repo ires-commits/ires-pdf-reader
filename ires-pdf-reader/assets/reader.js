@@ -16,7 +16,9 @@ async function render(url,title,root,token){
  const minus=el('button','','−');minus.type='button';minus.setAttribute('aria-label','Riduci zoom');
  const zoomLabel=el('span','','100%');
  const plus=el('button','','+');plus.type='button';plus.setAttribute('aria-label','Aumenta zoom');
- toolbar.append(previous,current,total,next,minus,zoomLabel,plus);
+ const fit=el('button','','Adatta');fit.type='button';fit.setAttribute('aria-label','Adatta alla larghezza');
+ const share=el('button','','Condividi pagina');share.type='button';share.setAttribute('aria-label','Copia collegamento alla pagina corrente');
+ toolbar.append(previous,current,total,next,minus,zoomLabel,plus,fit,share);
  const viewport=el('div','ires-pdf-pages');const canvas=el('canvas');viewport.append(canvas);
  content.append(toolbar,viewport);
  try{
@@ -28,7 +30,11 @@ async function render(url,title,root,token){
   const task=pdfjs.getDocument({url:url});
   const doc=await task.promise;if(token!==session){doc.destroy();return;}
   status.remove();total.textContent='/ '+doc.numPages;current.max=String(doc.numPages);
-  let page=1,scale=1.2,renderId=0;
+  const storageKey='ires-pdf-page:'+url;
+  let remembered=1;try{remembered=Number(localStorage.getItem(storageKey))||1;}catch(_error){}
+  const fromHash=Number(new URLSearchParams(location.hash.slice(1)).get('page'));
+  let page=fromHash>0?fromHash:remembered,scale=1.2,renderId=0,renderTask=null;
+  let queue=Promise.resolve();
   async function paint(){
    const id=++renderId;
    const number=Math.min(doc.numPages,Math.max(1,Number(page)||1));page=number;current.value=String(number);
@@ -37,17 +43,26 @@ async function render(url,title,root,token){
    const vp=p.getViewport({scale:scale*window.devicePixelRatio});
    canvas.width=Math.round(vp.width);canvas.height=Math.round(vp.height);
    canvas.style.width=(vp.width/window.devicePixelRatio)+'px';canvas.style.height=(vp.height/window.devicePixelRatio)+'px';
-   const context=canvas.getContext('2d');await p.render({canvasContext:context,viewport:vp}).promise;
+   const context=canvas.getContext('2d');
+   renderTask=p.render({canvasContext:context,viewport:vp});await renderTask.promise;
+   if(id===renderId){try{localStorage.setItem(storageKey,String(number));}catch(_error){}}
+   renderTask=null;
   }
-  previous.onclick=()=>{page--;paint().catch(fail);};
-  next.onclick=()=>{page++;paint().catch(fail);};
-  current.onchange=()=>{page=Number(current.value);paint().catch(fail);};
-  minus.onclick=()=>{scale=Math.max(.6,scale-.2);paint().catch(fail);};
-  plus.onclick=()=>{scale=Math.min(3,scale+.2);paint().catch(fail);};
+  function schedule(){queue=queue.catch(()=>{}).then(()=>{if(token===session)return paint();}).catch(fail);}
+  previous.onclick=()=>{page=Math.max(1,page-1);schedule();};
+  next.onclick=()=>{page=Math.min(doc.numPages,page+1);schedule();};
+  current.onchange=()=>{page=Math.min(doc.numPages,Math.max(1,Number(current.value)||1));schedule();};
+  minus.onclick=()=>{scale=Math.max(.6,scale-.2);schedule();};
+  plus.onclick=()=>{scale=Math.min(3,scale+.2);schedule();};
+  fit.onclick=()=>{const available=Math.max(240,viewport.clientWidth-32);doc.getPage(page).then(p=>{scale=Math.min(3,Math.max(.4,available/p.getViewport({scale:1}).width));schedule();}).catch(fail);};
+  share.onclick=async()=>{const link=new URL(location.href);link.hash='page='+page;try{await navigator.clipboard.writeText(link.href);share.textContent='Link copiato';setTimeout(()=>{share.textContent='Condividi pagina';},1800);}catch(_error){window.prompt('Copia il collegamento:',link.href);}};
+  viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
+  viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();previous.click();}});
   await paint();
  }catch(error){if(token!==session)return;fail(error);}
  function fail(error){
   if(token!==session)return;
+  if(!status.isConnected)content.prepend(status);
   status.textContent='Visualizzatore avanzato non disponibile. Apertura con il lettore del browser.';
   status.style.display='block';toolbar.remove();viewport.remove();
   const iframe=el('iframe','ires-pdf-fallback');iframe.title=title;iframe.src=url;content.append(iframe);
