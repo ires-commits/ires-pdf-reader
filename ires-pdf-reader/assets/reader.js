@@ -29,6 +29,24 @@ async function render(url,title,root,token){
  toolbar.prepend(mode,fullscreen);
  const sidebarToggle=el('button','','☰ Pagine');sidebarToggle.type='button';sidebarToggle.setAttribute('aria-expanded','false');sidebarToggle.setAttribute('aria-label','Mostra miniature e indice');
  toolbar.prepend(sidebarToggle);
+ const navGroup=el('div','ires-pdf-tool-group ires-pdf-nav-group');
+ const zoomGroup=el('div','ires-pdf-tool-group ires-pdf-zoom-group');
+ const viewGroup=el('div','ires-pdf-tool-group ires-pdf-view-group');
+ const searchGroup=el('div','ires-pdf-tool-group ires-pdf-search-group');
+ const actionsGroup=el('div','ires-pdf-tool-group ires-pdf-actions-group');
+ navGroup.append(previous,current,total,next);
+ zoomGroup.append(minus,zoomLabel,plus,fit);
+ viewGroup.append(sidebarToggle,mode,fullscreen);
+ searchGroup.append(search,find,prevMatch,nextMatch,searchInfo);
+ actionsGroup.append(share);
+ toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,searchGroup,actionsGroup);
+ toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Strumenti lettore PDF');
+ sidebarToggle.textContent='☰';sidebarToggle.title='Pannello pagine';sidebarToggle.setAttribute('aria-label','Apri o chiudi il pannello laterale');
+ mode.textContent='Continuo';mode.title='Passa allo scorrimento continuo';
+ fullscreen.textContent='⛶';fullscreen.title='Schermo intero';fullscreen.setAttribute('aria-label','Schermo intero');
+ fit.textContent='Adatta';share.textContent='Condividi';share.title='Copia collegamento alla pagina';
+ search.placeholder='Cerca nel PDF';find.textContent='Trova';
+
  const workspace=el('div','ires-pdf-workspace');
  const sidebar=el('aside','ires-pdf-sidebar');sidebar.setAttribute('aria-label','Navigazione documento');sidebar.hidden=true;
  const tabs=el('div','ires-pdf-side-tabs');
@@ -155,7 +173,7 @@ async function render(url,title,root,token){
   mode.onclick=()=>{
    continuous=!continuous;modeEpoch++;
    mode.setAttribute('aria-pressed',String(continuous));
-   mode.textContent=continuous?'Pagina singola':'Scorrimento continuo';
+   mode.textContent=continuous?'Singola':'Continuo';mode.title=continuous?'Passa alla pagina singola':'Passa allo scorrimento continuo';
    singlePage.hidden=continuous;stack.hidden=!continuous;
    if(continuous)setupContinuous().catch(fail);else{stack.replaceChildren();slots=[];schedule();}
   };
@@ -282,7 +300,7 @@ async function render(url,title,root,token){
   nextMatch.onclick=()=>showMatch(matchIndex+1);
   search.addEventListener('input',()=>{searchRun++;matches=[];matchIndex=-1;searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);resultsList.replaceChildren();searchInfo.textContent='';prevMatch.disabled=true;nextMatch.disabled=true;find.disabled=false;});
   search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(matches.length&&searchTerm===search.value.trim())showMatch(matchIndex+(e.shiftKey?-1:1));else searchDocument();}});
-  share.onclick=async()=>{const link=new URL(location.href);link.hash='page='+page;try{await navigator.clipboard.writeText(link.href);share.textContent='Link copiato';setTimeout(()=>{share.textContent='Condividi pagina';},1800);}catch(_error){window.prompt('Copia il collegamento:',link.href);}};
+  share.onclick=async()=>{const link=new URL(location.href);link.hash='page='+page;try{await navigator.clipboard.writeText(link.href);share.textContent='Link copiato';setTimeout(()=>{share.textContent='Condividi';},1800);}catch(_error){window.prompt('Copia il collegamento:',link.href);}};
   viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
   viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();previous.click();}});
   await paint();
