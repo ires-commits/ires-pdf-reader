@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
  * Text Domain: ires-pdf-reader
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
 final class IRES_PDF_Reader {
- const VERSION='1.2.0';
+ const VERSION='1.2.1';
  static function init() {
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
@@ -28,6 +28,7 @@ final class IRES_PDF_Reader {
   if(!current_user_can('manage_options'))return;
   echo '<div class="wrap"><h1>IRES PDF Reader</h1><p>Shortcode: <code>[ires_pdf_reader url="https://esempio.it/documento.pdf" title="Documento"]</code></p><form method="post" action="options.php">';
   settings_fields('ires_pdf_reader');
+  echo '<input type="hidden" name="ires_pdf_reader_integration" value="0">';
   echo '<p><label><input type="checkbox" name="ires_pdf_reader_integration" value="1" '.checked(get_option('ires_pdf_reader_integration',true),true,false).'> Integrazione automatica nelle pubblicazioni</label></p>';
   echo '<p><label>Chiave campo PDF ACF: <input name="ires_pdf_reader_meta_key" value="'.esc_attr(get_option('ires_pdf_reader_meta_key','')).'"></label></p>';
   submit_button();echo '</form></div>';
@@ -38,7 +39,9 @@ final class IRES_PDF_Reader {
   $parts=wp_parse_url($url);$site=wp_parse_url(home_url());
   if(!is_array($parts)||!is_array($site)||empty($parts['host'])||empty($site['host'])||!in_array(strtolower($parts['scheme']??''),['http','https'],true))return '';
   if(isset($parts['user'])||isset($parts['pass']))return '';
-  $hosts=apply_filters('ires_pdf_reader_allowed_hosts',[strtolower($site['host'])]);
+  $site_host=strtolower($site['host']);
+  $base_host=preg_replace('/^www\\./','',$site_host);
+  $hosts=apply_filters('ires_pdf_reader_allowed_hosts',[$base_host,'www.'.$base_host]);
   if(!is_array($hosts)||!in_array(strtolower($parts['host']),array_map('strtolower',$hosts),true))return '';
   if(!preg_match('/\.pdf$/i',$parts['path']??'')&&!apply_filters('ires_pdf_reader_allow_non_pdf_url',false,$url))return '';
   return $url;
@@ -49,7 +52,11 @@ final class IRES_PDF_Reader {
  }
  static function shortcode($atts) {
   $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF'],$atts,'ires_pdf_reader');
-  $url=self::valid_pdf($a['url']);if(!$url)return '';
+  $url=self::valid_pdf($a['url']);
+  if(!$url){
+   if(current_user_can('manage_options'))return '<span class="ires-pdf-error" role="alert">IRES PDF Reader: URL PDF non valido o dominio non autorizzato. Controlla l’indirizzo del file e il dominio configurato in WordPress.</span>';
+   return '';
+  }
   $page=add_query_arg(['ires_pdf_reader'=>'1','pdf'=>$url,'title'=>$a['title']],home_url('/'));
   $out='<span class="ires-pdf-actions">';
   if($a['mode']!=='page')$out.='<button type="button" class="ires-pdf-open" data-pdf="'.esc_attr($url).'" data-title="'.esc_attr($a['title']).'">'.esc_html($a['label']).'</button>';
