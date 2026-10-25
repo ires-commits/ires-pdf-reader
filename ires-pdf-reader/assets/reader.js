@@ -6,7 +6,7 @@ const config=window.iresPdfReader||{};
 function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;}
 function close(){stopSpeech();session++;if(!active)return;active.remove();active=null;document.body.style.overflow='';document.removeEventListener('keydown',keys);if(lastFocus&&lastFocus.focus)lastFocus.focus();}
 function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){const controls=[...active.querySelectorAll('a,button,input')].filter(x=>!x.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
-async function render(url,title,root,token){
+async function render(url,title,root,token,citation=''){
  const content=el('div','ires-pdf-viewer');root.append(content);
  const status=el('div','ires-pdf-status','Caricamento documento…');content.append(status);
  const toolbar=el('div','ires-pdf-controls');
@@ -499,8 +499,8 @@ async function render(url,title,root,token){
   cite.onclick=()=>{
    const selected=selectedPassage();
    const quotation=selected?'“'+selected+'” ':'';
-   const citation=quotation+title+' (s.d.), p. '+page+'. '+pageUrl(selected);
-   copyValue(citation,cite);
+   const citationText=quotation+(citation||title+' (s.d.).')+' p. '+page+'. '+pageUrl(selected);
+   copyValue(citationText,cite);
   };
   if(linkedText){search.value='';searchInfo.textContent='Passaggio condiviso';}
   const annotationKey='ires-pdf-annotations:v1:'+url;
@@ -647,7 +647,7 @@ function open(url,title,button){
  const exit=el('button','ires-pdf-close','Chiudi');exit.type='button';exit.onclick=close;
  bar.append(heading,download,exit);overlay.append(bar);document.body.append(overlay);
  active=overlay;document.body.style.overflow='hidden';document.addEventListener('keydown',keys);exit.focus();
- render(url,title,overlay,token);
+ render(url,title,overlay,token,button&&button.dataset.citation||'');
 }
 document.addEventListener('click',e=>{const button=e.target.closest('.ires-pdf-open');if(!button)return;const url=button.getAttribute('data-pdf');if(!url)return;e.preventDefault();open(url,button.getAttribute('data-title')||'Documento PDF',button);});
 // Open links from older versions as well as explicit auto-open links.
@@ -669,6 +669,6 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else autoOpenSharedDocument();
 if(document.body.classList.contains('ires-pdf-dedicated')){
  const root=document.querySelector('.ires-pdf-dedicated-root');
- if(root){const token=++session;render(root.dataset.pdf,root.dataset.title||'Documento PDF',root,token);}
+ if(root){const token=++session;render(root.dataset.pdf,root.dataset.title||'Documento PDF',root,token,root.dataset.citation||'');}
 }
 })();
