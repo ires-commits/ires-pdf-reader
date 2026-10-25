@@ -22,8 +22,20 @@ async function render(url,title,root,token){
  const searchInfo=el('span','ires-pdf-search-info');searchInfo.setAttribute('role','status');
  const share=el('button','','Condividi pagina');share.type='button';share.setAttribute('aria-label','Copia collegamento alla pagina corrente');
  toolbar.append(previous,current,total,next,minus,zoomLabel,plus,fit,share,search,find,searchInfo);
+ const sidebarToggle=el('button','','☰ Pagine');sidebarToggle.type='button';sidebarToggle.setAttribute('aria-expanded','false');sidebarToggle.setAttribute('aria-label','Mostra miniature e indice');
+ toolbar.prepend(sidebarToggle);
+ const workspace=el('div','ires-pdf-workspace');
+ const sidebar=el('aside','ires-pdf-sidebar');sidebar.setAttribute('aria-label','Navigazione documento');sidebar.hidden=true;
+ const tabs=el('div','ires-pdf-side-tabs');
+ const thumbsTab=el('button','','Miniature');thumbsTab.type='button';
+ const outlineTab=el('button','','Indice');outlineTab.type='button';
+ const thumbList=el('div','ires-pdf-thumb-list');const outlineList=el('div','ires-pdf-outline-list');outlineList.hidden=true;
+ tabs.append(thumbsTab,outlineTab);sidebar.append(tabs,thumbList,outlineList);
  const viewport=el('div','ires-pdf-pages');const canvas=el('canvas');viewport.append(canvas);
- content.append(toolbar,viewport);
+ workspace.append(sidebar,viewport);content.append(toolbar,workspace);
+ sidebarToggle.onclick=()=>{sidebar.hidden=!sidebar.hidden;sidebarToggle.setAttribute('aria-expanded',String(!sidebar.hidden));};
+ thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;};
+ outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;};
  try{
   if(!config.pdfjsUrl||!config.workerUrl)throw Error('Libreria PDF.js non configurata');
   const pdfjs=window.pdfjsLib;
@@ -38,6 +50,37 @@ async function render(url,title,root,token){
   const fromHash=Number(new URLSearchParams(location.hash.slice(1)).get('page'));
   let page=fromHash>0?fromHash:remembered,scale=1.2,renderId=0,renderTask=null;
   let queue=Promise.resolve();
+  let thumbCount=0,thumbBusy=false;
+  const moreThumbs=el('button','ires-pdf-more-thumbs','Carica altre pagine');moreThumbs.type='button';
+  async function loadThumbnails(){
+   if(thumbBusy||token!==session)return;
+   thumbBusy=true;moreThumbs.disabled=true;
+   const until=Math.min(doc.numPages,thumbCount+16);
+   for(let n=thumbCount+1;n<=until;n++){
+    if(token!==session)break;
+    const button=el('button','ires-pdf-thumb');button.type='button';button.setAttribute('aria-label','Vai a pagina '+n);
+    const thumbCanvas=el('canvas');const label=el('span','',String(n));button.append(thumbCanvas,label);thumbList.insertBefore(button,moreThumbs);
+    button.onclick=()=>{page=n;schedule();if(window.matchMedia('(max-width: 720px)').matches){sidebar.hidden=true;sidebarToggle.setAttribute('aria-expanded','false');}};
+    try{
+     const p=await doc.getPage(n);if(token!==session)break;
+     const vp=p.getViewport({scale:.18});thumbCanvas.width=Math.ceil(vp.width);thumbCanvas.height=Math.ceil(vp.height);
+     await p.render({canvasContext:thumbCanvas.getContext('2d'),viewport:vp}).promise;
+    }catch(error){console.warn('IRES PDF Reader thumbnail',error);}
+    thumbCount=n;
+   }
+   moreThumbs.hidden=thumbCount>=doc.numPages;moreThumbs.disabled=false;thumbBusy=false;
+  }
+  thumbList.append(moreThumbs);moreThumbs.onclick=loadThumbnails;
+  loadThumbnails();
+  function appendOutline(items,parent,depth){
+   items.forEach(item=>{
+    const button=el('button','ires-pdf-outline-item',item.title||'Sezione');button.type='button';
+    button.style.paddingLeft=(12+Math.min(depth,5)*14)+'px';parent.append(button);
+    button.onclick=async()=>{try{const dest=typeof item.dest==='string'?await doc.getDestination(item.dest):item.dest;if(!dest)return;const ref=dest[0];const index=await doc.getPageIndex(ref);page=index+1;schedule();}catch(error){console.warn('IRES PDF Reader outline',error);}};
+    if(item.items&&item.items.length)appendOutline(item.items,parent,depth+1);
+   });
+  }
+  doc.getOutline().then(items=>{if(token!==session)return;if(items&&items.length)appendOutline(items,outlineList,0);else outlineList.append(el('p','ires-pdf-empty','Questo PDF non contiene un indice navigabile.'));}).catch(()=>{outlineList.append(el('p','ires-pdf-empty','Indice non disponibile.'));});
   async function paint(){
    const id=++renderId;
    const number=Math.min(doc.numPages,Math.max(1,Number(page)||1));page=number;current.value=String(number);
@@ -48,7 +91,7 @@ async function render(url,title,root,token){
    canvas.style.width=(vp.width/window.devicePixelRatio)+'px';canvas.style.height=(vp.height/window.devicePixelRatio)+'px';
    const context=canvas.getContext('2d');
    renderTask=p.render({canvasContext:context,viewport:vp});await renderTask.promise;
-   if(id===renderId){try{localStorage.setItem(storageKey,String(number));}catch(_error){}}
+   if(id===renderId){try{localStorage.setItem(storageKey,String(number));}catch(_error){} thumbList.querySelectorAll('.ires-pdf-thumb').forEach((b,i)=>{b.classList.toggle('is-current',i+1===number);});}
    renderTask=null;
   }
   function schedule(){queue=queue.catch(()=>{}).then(()=>{if(token===session)return paint();}).catch(fail);}
@@ -88,7 +131,7 @@ async function render(url,title,root,token){
   if(token!==session)return;
   if(!status.isConnected)content.prepend(status);
   status.textContent='Visualizzatore avanzato non disponibile. Apertura con il lettore del browser.';
-  status.style.display='block';toolbar.remove();viewport.remove();
+  status.style.display='block';toolbar.remove();workspace.remove();
   const iframe=el('iframe','ires-pdf-fallback');iframe.title=title;iframe.src=url;content.append(iframe);
   if(window.console)console.warn('IRES PDF Reader',error);
  }
