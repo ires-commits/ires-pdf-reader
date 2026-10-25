@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 2.0.2
+ * Version: 2.0.3
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -11,11 +11,12 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
 final class IRES_PDF_Reader {
- const VERSION='2.0.2';
+ const VERSION='2.0.3';
  static function init() {
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
-  add_action('template_redirect',[__CLASS__,'dedicated']);
+  add_action('template_redirect',[__CLASS__,'dedicated'],0);
+  add_filter('redirect_canonical',[__CLASS__,'preserve_shared_reader'],10,2);
   add_action('admin_menu',[__CLASS__,'admin_menu']);
   add_action('admin_init',[__CLASS__,'register_settings']);
   add_filter('the_content',[__CLASS__,'integrate_publication'],30);
@@ -112,6 +113,9 @@ final class IRES_PDF_Reader {
   }
   if(!$url)return $content;
   return $content.'<section class="ires-pdf-integrated"><h3>Consulta la pubblicazione</h3>'.self::shortcode(['url'=>$url,'title'=>get_the_title($id)]).'</section>';
+ }
+ static function preserve_shared_reader($redirect,$requested) {
+  return isset($_GET['ires_pdf_reader']) && $_GET['ires_pdf_reader']==='1' ? false : $redirect;
  }
  static function dedicated() {
   if(!isset($_GET['ires_pdf_reader'])||$_GET['ires_pdf_reader']!=='1')return;
