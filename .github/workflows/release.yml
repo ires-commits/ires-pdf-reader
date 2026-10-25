@@ -45,6 +45,16 @@ jobs:
             exit 1
           fi
           echo "publish=true" >> "$GITHUB_OUTPUT"
+      - name: Bundle PDF.js locally
+        if: steps.check.outputs.publish == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack pdfjs-dist@4.10.38 --pack-destination /tmp
+          mkdir -p ires-pdf-reader/vendor/pdfjs
+          tar -xzf /tmp/pdfjs-dist-4.10.38.tgz -C /tmp package/build/pdf.mjs package/build/pdf.worker.mjs
+          cp /tmp/package/build/pdf.mjs ires-pdf-reader/vendor/pdfjs/pdf.mjs
+          cp /tmp/package/build/pdf.worker.mjs ires-pdf-reader/vendor/pdfjs/pdf.worker.mjs
       - name: Build ZIP
         if: steps.check.outputs.publish == 'true'
         shell: bash
