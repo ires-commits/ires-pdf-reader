@@ -1,18 +1,20 @@
-# IRES PDF Reader — roadmap dopo 2.0.0
+# IRES PDF Reader — roadmap aggiornata
 
-## Disponibile nel codice 2.0.0 (da collaudare)
-- Segnalibri personali per pagina, conservati solo nel localStorage del browser.
-- Link alla pagina e al testo selezionato con parametri URL hash (il testo deve essere estraibile).
-- Copia citazione essenziale con titolo, pagina e URL. Autori/anno non vengono inventati: metadati bibliografici completi richiedono una successiva integrazione.
-- Conservati gli aggiornamenti GitHub del plugin.
+## Versione 2.1: annotazioni personali
+- Evidenziatore con quattro colori, note modificabili e cancellabili.
+- Pannello Note con collegamenti alla pagina annotata.
+- Salvataggio locale nel browser, esportazione/importazione JSON per lo stesso URL PDF.
+- Prima implementazione basata sul testo selezionato: per frasi ripetute nella stessa pagina viene evidenziata la prima occorrenza; da migliorare con ancoraggio posizionale.
+- Da collaudare su smartphone e PDF con testo suddiviso in molti elementi.
 
-## Iterazioni pianificate
-1. 2.1: annotazioni ed evidenziatore persistenti con ancoraggio al testo, esportazione/importazione, privacy locale e fallback per PDF senza testo.
-2. 2.2: lettura vocale con Web Speech API, controlli pausa/velocità, verifica supporto browser e accessibilità.
-3. 2.3: confronto affiancato di due documenti, sincronizzazione opzionale, gestione memoria e mobile.
-4. 2.4: estrazione tabelle con anteprima e CSV; accuratezza da verificare su tabelle complesse, nessuna esportazione silenziosa di dati errati.
-5. 2.5: OCR di scansioni, scelta fra browser e server, limiti di elaborazione, informativa privacy.
-6. 3.0: assistente AI con fonti, pagine cliccabili, distinzione tra evidenza e inferenza, protezioni dati e controllo costi.
+## Prossime versioni
+1. 2.2: lettura vocale, velocità, pausa/ripresa, accessibilità.
+2. 2.3: traduzione multilingue di selezione e pagina; valutare servizio locale/esterno e privacy.
+3. 2.4: confronto affiancato tra documenti.
+4. 2.5: esportazione tabelle con anteprima e CSV/Excel.
+5. 3.0: assistente AI con fonti e riferimenti verificabili.
 
-## Gate di qualità
-Per ogni release: validazione PHP/JS, prove su PDF testuali e scansionati, documenti lunghi, responsive, accessibilità tastiera, backup e verifica dell'aggiornamento senza disattivazione. Le funzionalità future non sono ancora implementate.
+L'OCR non è nella roadmap principale: i PDF previsti sono prevalentemente testuali. Rimane un'eventuale estensione futura, solo se emerge un bisogno concreto.
+
+## Compatibilità
+Mantenere il sistema di aggiornamento GitHub esistente, testare su WordPress e mobile, non modificare il PDF originale. Le note restano nel browser: non sono sincronizzate tra dispositivi senza esportazione/importazione.
