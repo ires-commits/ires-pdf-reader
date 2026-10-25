@@ -88,16 +88,18 @@ async function render(url,title,root,token){
   const stack=el('div','ires-pdf-continuous');stack.hidden=true;viewport.append(stack);
   const dpr=()=>Math.min(window.devicePixelRatio||1,2);
   let searchTerm=linkedText;
+  let passageTerms=linkedText?linkedText.toLocaleLowerCase().split(/\s+/).filter(word=>word.length>=3).slice(0,24):[];
   function highlightText(layer){
    layer.querySelectorAll('.ires-pdf-match-overlay').forEach(node=>node.remove());
-   if(!searchTerm)return;
-   const term=searchTerm.toLocaleLowerCase();
+   if(!searchTerm&&!passageTerms.length)return;
+   const terms=passageTerms.length?passageTerms:[searchTerm.toLocaleLowerCase()];
    const spans=layer.querySelectorAll('span');
    spans.forEach(span=>{
     const walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);
     const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
     nodes.forEach(node=>{
-     const value=node.nodeValue.toLocaleLowerCase();let start=0,index;
+     const value=node.nodeValue.toLocaleLowerCase();
+     for(const term of terms){let start=0,index;
      while((index=value.indexOf(term,start))!==-1){
       const range=document.createRange();range.setStart(node,index);range.setEnd(node,index+term.length);
       const bounds=layer.getBoundingClientRect();
@@ -109,7 +111,7 @@ async function render(url,title,root,token){
        layer.append(mark);
       }
       start=index+term.length;
-     }
+     }}
     });
    });
   }
@@ -296,6 +298,7 @@ async function render(url,title,root,token){
    link.searchParams.set('ires_pdf_reader','1');
    link.searchParams.set('pdf',url);
    link.searchParams.set('title',title);
+   link.searchParams.set('ires_pdf_auto','1');
    link.hash='page='+encodeURIComponent(page)+(text?'&text='+encodeURIComponent(text):'');
    return link.href;
   }
@@ -370,13 +373,13 @@ async function render(url,title,root,token){
   find.onclick=searchDocument;
   prevMatch.onclick=()=>showMatch(matchIndex-1);
   nextMatch.onclick=()=>showMatch(matchIndex+1);
-  search.addEventListener('input',()=>{searchRun++;matches=[];matchIndex=-1;searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);resultsList.replaceChildren();searchInfo.textContent='';prevMatch.disabled=true;nextMatch.disabled=true;find.disabled=false;});
+  search.addEventListener('input',()=>{passageTerms=[];searchRun++;matches=[];matchIndex=-1;searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);resultsList.replaceChildren();searchInfo.textContent='';prevMatch.disabled=true;nextMatch.disabled=true;find.disabled=false;});
   search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(matches.length&&searchTerm===search.value.trim())showMatch(matchIndex+(e.shiftKey?-1:1));else searchDocument();}});
   share.onclick=()=>copyValue(pageUrl(''),share);
   viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
   viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();previous.click();}});
   await paint();
-  if(linkedText){searchDocument().catch(error=>console.warn('IRES PDF Reader deep link search',error));}
+  if(linkedText){searchInfo.textContent='Passaggio evidenziato · pagina '+page;}
  }catch(error){if(token!==session)return;fail(error);}
  function fail(error){
   if(token!==session)return;
@@ -398,14 +401,23 @@ function open(url,title,button){
  render(url,title,overlay,token);
 }
 document.addEventListener('click',e=>{const button=e.target.closest('.ires-pdf-open');if(!button)return;const url=button.getAttribute('data-pdf');if(!url)return;e.preventDefault();open(url,button.getAttribute('data-title')||'Documento PDF',button);});
-// Compatibility with links shared by versions before 2.0.2: open the sole PDF automatically.
-if(!document.body.classList.contains('ires-pdf-dedicated')){
- const params=new URLSearchParams(location.hash.slice(1));
- if(/^\\d+$/.test(params.get('page')||'')){
-  const buttons=[...document.querySelectorAll('.ires-pdf-open[data-pdf]')];
-  if(buttons.length===1)open(buttons[0].getAttribute('data-pdf'),buttons[0].getAttribute('data-title')||'Documento PDF',buttons[0]);
+// Open links from older versions as well as explicit auto-open links.
+function autoOpenSharedDocument(){
+ if(document.body.classList.contains('ires-pdf-dedicated'))return;
+ const hash=new URLSearchParams(location.hash.slice(1));
+ const query=new URLSearchParams(location.search);
+ const requested=query.get('ires_pdf_auto')==='1'||/^\d+$/.test(hash.get('page')||'');
+ if(!requested)return;
+ const buttons=[...document.querySelectorAll('.ires-pdf-open[data-pdf]')];
+ const requestedPdf=query.get('pdf');
+ const matching=requestedPdf?buttons.filter(b=>b.getAttribute('data-pdf')===requestedPdf):buttons;
+ if(matching.length===1){
+  const button=matching[0];
+  open(button.getAttribute('data-pdf'),button.getAttribute('data-title')||'Documento PDF',button);
  }
 }
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',autoOpenSharedDocument,{once:true});
+else autoOpenSharedDocument();
 if(document.body.classList.contains('ires-pdf-dedicated')){
  const root=document.querySelector('.ires-pdf-dedicated-root');
  if(root){const token=++session;render(root.dataset.pdf,root.dataset.title||'Documento PDF',root,token);}
