@@ -21,7 +21,8 @@ async function render(url,title,root,token){
  content.append(toolbar,viewport);
  try{
   if(!config.pdfjsUrl||!config.workerUrl)throw Error('Libreria PDF.js non configurata');
-  const pdfjs=await import(config.pdfjsUrl);
+  const pdfjs=window.pdfjsLib;
+  if(!pdfjs)throw Error('PDF.js non caricato: verifica la risposta del file pdf.min.js');
   if(token!==session)return;
   pdfjs.GlobalWorkerOptions.workerSrc=config.workerUrl;
   const task=pdfjs.getDocument({url:url});
