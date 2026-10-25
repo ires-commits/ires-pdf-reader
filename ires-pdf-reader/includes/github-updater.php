@@ -4,10 +4,27 @@ final class IRES_PDF_GitHub_Updater {
  const REPO = 'ires-commits/ires-pdf-reader';
  const CACHE = 'ires_pdf_reader_github_release';
  static function init() {
+  add_filter('site_transient_update_plugins', [__CLASS__, 'check']);
   add_filter('pre_set_site_transient_update_plugins', [__CLASS__, 'check']);
   add_filter('plugins_api', [__CLASS__, 'info'], 10, 3);
   add_filter('update_plugins_github.com', [__CLASS__, 'update_by_uri'], 10, 4);
+  add_action('admin_post_ires_pdf_check_updates', [__CLASS__, 'force_check']);
   add_action('upgrader_process_complete', [__CLASS__, 'clear_cache_after_upgrade'], 10, 2);
+ }
+ static function force_check() {
+  if (!current_user_can('update_plugins')) wp_die('Accesso negato.');
+  check_admin_referer('ires_pdf_check_updates');
+  delete_transient(self::CACHE);
+  delete_site_transient('update_plugins');
+  wp_update_plugins();
+  wp_safe_redirect(add_query_arg('ires_pdf_checked','1',admin_url('options-general.php?page=ires-pdf-reader')));
+  exit;
+ }
+ static function diagnostics() {
+  $release=self::release();
+  $updates=get_site_transient('update_plugins');
+  $file='ires-pdf-reader/ires-pdf-reader.php';
+  return ['release'=>$release,'detected'=>is_object($updates)&&isset($updates->response[$file]),'checked'=>is_object($updates)?($updates->last_checked??0):0];
  }
  static function release() {
   $cached = get_transient(self::CACHE);
@@ -55,9 +72,13 @@ final class IRES_PDF_GitHub_Updater {
   if (!isset($transient->checked[$file])) return $transient;
   $release=self::release();
   if ($release && version_compare($release['version'],$transient->checked[$file],'>')) {
-   $transient->response[$file]=(object)['slug'=>'ires-pdf-reader','plugin'=>$file,'new_version'=>$release['version'],'url'=>$release['url'],'package'=>$release['package']];
+   $transient->response[$file]=(object)['id'=>'https://github.com/'.self::REPO,'slug'=>'ires-pdf-reader','plugin'=>$file,'new_version'=>$release['version'],'version'=>$release['version'],'url'=>$release['url'],'package'=>$release['package']];
+   unset($transient->no_update[$file]);
   }
-  if ($release && version_compare($release['version'],$transient->checked[$file],'<=')) unset($transient->response[$file]);
+  if ($release && version_compare($release['version'],$transient->checked[$file],'<=')) {
+   unset($transient->response[$file]);
+   $transient->no_update[$file]=(object)['id'=>'https://github.com/'.self::REPO,'slug'=>'ires-pdf-reader','plugin'=>$file,'new_version'=>$release['version'],'version'=>$release['version'],'url'=>$release['url'],'package'=>$release['package']];
+  }
   return $transient;
  }
  static function info($result,$action,$args) {
