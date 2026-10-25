@@ -86,6 +86,9 @@ async function render(url,title,root,token){
   const hashParams=new URLSearchParams(location.hash.slice(1));
   const fromHash=Number(hashParams.get('page'));
   const linkedText=(hashParams.get('text')||'').slice(0,200);
+  const linkedStart=(hashParams.get('start')||'').split(',').map(Number);
+  const linkedEnd=(hashParams.get('end')||'').split(',').map(Number);
+  const hasLinkedPosition=linkedStart.length===2&&linkedEnd.length===2&&linkedStart.concat(linkedEnd).every(Number.isInteger);
   let page=fromHash>0?fromHash:remembered,scale=1.2,renderId=0,renderTask=null;
   let queue=Promise.resolve();
   let continuous=false, slots=[],scrollTimer=null,scrollBusy=false,scrollAgain=false,modeEpoch=0;
@@ -138,6 +141,12 @@ async function render(url,title,root,token){
     }
    }
    if(!searchTerm)return;
+   if(linkedText&&hasLinkedPosition){
+    const a=nodes[linkedStart[0]],b=nodes[linkedEnd[0]];
+    if(a&&b&&linkedStart[1]>=0&&linkedEnd[1]>0&&linkedStart[1]<=a.length&&linkedEnd[1]<=b.length){
+     paintRange(layer,a,linkedStart[1],b,linkedEnd[1]);return;
+    }
+   }
    if(linkedText){
     const words=linkedText.trim().split(/\\s+/).filter(Boolean);
     if(!words.length)return;
@@ -332,6 +341,7 @@ async function render(url,title,root,token){
    catch(_error){window.prompt('Copia:',value);}
   }
   let cachedSelection='';
+  let cachedPosition=null;
   function readSelection(){
    const selection=window.getSelection();
    if(!selection||selection.isCollapsed||!selection.anchorNode||!selection.focusNode)return '';
@@ -341,16 +351,27 @@ async function render(url,title,root,token){
    if(!anchor||!focus||!anchor.closest('.ires-pdf-text-layer')||!focus.closest('.ires-pdf-text-layer'))return '';
    return selection.toString().replace(/\\s+/g,' ').trim().slice(0,200);
   }
+  function capturePosition(){
+   const sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.rangeCount)return null;
+   const range=sel.getRangeAt(0);
+   const layer=range.startContainer.parentElement&&range.startContainer.parentElement.closest('.ires-pdf-text-layer');
+   if(!layer||!layer.contains(range.endContainer))return null;
+   const nodes=[];layer.querySelectorAll('span').forEach(span=>{const walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);while(walker.nextNode())if(walker.currentNode.nodeValue)nodes.push(walker.currentNode);});
+   const a=nodes.indexOf(range.startContainer),b=nodes.indexOf(range.endContainer);
+   if(a<0||b<0)return null;
+   const slot=layer.closest('[data-page]');
+   return {page:slot?Number(slot.dataset.page):page,start:[a,range.startOffset],end:[b,range.endOffset]};
+  }
   function selectedPassage(){return readSelection()||cachedSelection;}
   // Mobile browsers often collapse the native selection when the toolbar receives focus.
   document.addEventListener('selectionchange',()=>{
    if(token!==session)return;
    const selected=readSelection();
-   if(selected)cachedSelection=selected;
+   if(selected){cachedSelection=selected;cachedPosition=capturePosition();}
   });
   [passage,cite,annotate].forEach(button=>{
-   button.addEventListener('pointerdown',()=>{const selected=readSelection();if(selected)cachedSelection=selected;},{passive:true});
-   button.addEventListener('touchstart',()=>{const selected=readSelection();if(selected)cachedSelection=selected;},{passive:true});
+   button.addEventListener('pointerdown',()=>{const selected=readSelection();if(selected){cachedSelection=selected;cachedPosition=capturePosition();}},{passive:true});
+   button.addEventListener('touchstart',()=>{const selected=readSelection();if(selected){cachedSelection=selected;cachedPosition=capturePosition();}},{passive:true});
   });
   function pageUrl(text){
    const link=new URL(config.dedicatedUrl||location.origin+'/');
@@ -358,7 +379,10 @@ async function render(url,title,root,token){
    link.searchParams.set('pdf',url);
    link.searchParams.set('title',title);
    link.searchParams.set('ires_pdf_auto','1');
-   link.hash='page='+encodeURIComponent(page)+(text?'&text='+encodeURIComponent(text):'');
+   const position=text?cachedPosition:null;
+   const targetPage=position?position.page:page;
+   link.hash='page='+encodeURIComponent(targetPage)+(text?'&text='+encodeURIComponent(text):'');
+   if(position)link.hash+='&start='+position.start.join(',')+'&end='+position.end.join(',');
    return link.href;
   }
   passage.onclick=()=>{const text=selectedPassage();if(!text){window.alert('Seleziona prima un passaggio nel documento.');return;}copyValue(pageUrl(text),passage);};
@@ -368,7 +392,7 @@ async function render(url,title,root,token){
    const citation=quotation+title+' (s.d.), p. '+page+'. '+pageUrl(selected);
    copyValue(citation,cite);
   };
-  if(linkedText){search.value=linkedText;searchInfo.textContent='Passaggio condiviso';}
+  if(linkedText){search.value='';searchInfo.textContent='Passaggio condiviso';}
   const annotationKey='ires-pdf-annotations:v1:'+url;
   let annotations=[];
   try{const stored=JSON.parse(localStorage.getItem(annotationKey)||'[]');if(Array.isArray(stored))annotations=stored.filter(x=>Number.isInteger(x.page)&&typeof x.text==='string'&&x.text.length<=200&&typeof x.note==='string'&&x.note.length<=2000&&['yellow','green','blue','pink'].includes(x.color)).slice(0,500);}catch(_error){}
