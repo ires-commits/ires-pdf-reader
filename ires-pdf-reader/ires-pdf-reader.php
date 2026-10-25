@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 2.0.1
+ * Version: 2.0.2
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
 final class IRES_PDF_Reader {
- const VERSION='2.0.1';
+ const VERSION='2.0.2';
  static function init() {
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
@@ -73,7 +73,7 @@ final class IRES_PDF_Reader {
   wp_enqueue_style('ires-pdf-reader',plugins_url('assets/reader.css',__FILE__),[],self::VERSION);
   wp_enqueue_script('ires-pdf-reader-pdfjs',plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),[],self::VERSION,true);
   wp_enqueue_script('ires-pdf-reader',plugins_url('assets/reader.js',__FILE__),['ires-pdf-reader-pdfjs'],self::VERSION,true);
-  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__)]).';','before');
+  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/')]).';','before');
  }
  static function shortcode($atts) {
   $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF'],$atts,'ires_pdf_reader');
