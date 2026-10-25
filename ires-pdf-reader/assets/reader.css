@@ -67,3 +67,17 @@
 .ires-pdf-touch-continuous .ires-pdf-page-slot{overflow-anchor:none;touch-action:pan-y}
 .ires-pdf-touch-continuous .ires-pdf-text-layer{touch-action:pan-y}
 @media(max-width:720px){.ires-pdf-pages.ires-pdf-touch-continuous{padding:10px 4px;align-items:flex-start;justify-content:flex-start}.ires-pdf-touch-continuous .ires-pdf-continuous{margin:0 auto;min-width:0;width:max-content;max-width:none}.ires-pdf-touch-continuous .ires-pdf-page-slot{max-width:none}}
+
+/* v2.1: local annotations */
+.ires-pdf-notes-list[hidden]{display:none!important}
+.ires-pdf-notes-list{padding:10px;overflow:auto}
+.ires-pdf-note-controls{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.ires-pdf-note-controls button,.ires-pdf-note-row button{cursor:pointer;border:1px solid #d9e4ec;background:#fff;border-radius:6px;padding:6px;font-size:12px}
+.ires-pdf-note-row{padding:9px;margin:6px 0;border-left:4px solid #f2cc39;background:#fff;border-radius:6px;overflow-wrap:anywhere}
+.ires-pdf-note-row[data-color=green]{border-left-color:#63c389}.ires-pdf-note-row[data-color=blue]{border-left-color:#72b9f5}.ires-pdf-note-row[data-color=pink]{border-left-color:#ed92ba}
+.ires-pdf-note-jump{display:block;width:100%;text-align:left;font-weight:600}
+.ires-pdf-note-row p{font-size:12px;line-height:1.45;margin:6px 0}
+.ires-pdf-match-overlay.ires-pdf-note-highlight{background:rgba(255,218,64,.42);pointer-events:none}
+.ires-pdf-match-overlay.ires-pdf-note-highlight[data-color=green]{background:rgba(79,205,119,.38)}
+.ires-pdf-match-overlay.ires-pdf-note-highlight[data-color=blue]{background:rgba(70,167,244,.38)}
+.ires-pdf-match-overlay.ires-pdf-note-highlight[data-color=pink]{background:rgba(237,108,169,.38)}
