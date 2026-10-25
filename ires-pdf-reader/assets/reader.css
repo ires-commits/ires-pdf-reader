@@ -3,3 +3,12 @@
 .ires-pdf-controls .ires-pdf-search{width:12rem;max-width:35vw;text-align:left}.ires-pdf-search-info{font-size:.82rem;color:#36536c;min-width:5rem}.ires-pdf-controls button:disabled{opacity:.5;cursor:wait}@media(max-width:600px){.ires-pdf-controls .ires-pdf-search{width:9rem;max-width:45vw}.ires-pdf-search-info{min-width:0}}
 
 .ires-pdf-workspace{display:flex;flex:1;min-height:0;min-width:0}.ires-pdf-workspace>.ires-pdf-pages{min-width:0}.ires-pdf-sidebar{width:210px;flex:0 0 210px;max-width:42vw;background:#fff;border-right:1px solid #ddd;overflow:auto}.ires-pdf-sidebar[hidden],.ires-pdf-thumb-list[hidden],.ires-pdf-outline-list[hidden]{display:none!important}.ires-pdf-side-tabs{display:flex;position:sticky;top:0;background:#fff}.ires-pdf-side-tabs button{flex:1;padding:.7rem;border:0;background:#eef3f8;cursor:pointer}.ires-pdf-thumb-list{display:flex;flex-direction:column;align-items:center;gap:.6rem;padding:.6rem}.ires-pdf-thumb{display:flex;flex-direction:column;align-items:center;width:100%;padding:.4rem;border:2px solid transparent;background:#f5f8fa;cursor:pointer}.ires-pdf-thumb.is-current{border-color:#165b80}.ires-pdf-thumb canvas{max-width:100%;height:auto;background:#fff}.ires-pdf-outline-item{display:block;width:100%;text-align:left;border:0;background:transparent;padding:.6rem;cursor:pointer}.ires-pdf-outline-item:hover{background:#eaf2f8}.ires-pdf-empty{padding:1rem;color:#617588}@media(max-width:720px){.ires-pdf-sidebar{width:155px;flex-basis:155px}.ires-pdf-controls{justify-content:flex-start}}
+
+/* Continuous document mode */
+.ires-pdf-continuous{position:relative;display:flex;flex-direction:column;align-items:center;gap:18px;width:max-content;min-width:100%;padding-bottom:24px}
+.ires-pdf-continuous[hidden],.ires-pdf-pages>canvas[hidden]{display:none!important}
+.ires-pdf-page-slot{position:relative;flex-shrink:0;background:#fff;box-shadow:0 3px 14px #0002;max-width:none}
+.ires-pdf-page-slot canvas{display:block;max-width:none;box-shadow:none}
+.ires-pdf-page-number{position:absolute;bottom:0;right:0;padding:3px 8px;background:#eef2f7;color:#3c5265;font-size:11px;opacity:.85;z-index:1}
+.ires-pdf-controls button[aria-pressed=true]{background:#165b80;color:#fff}
+.ires-pdf-overlay:fullscreen{width:100vw;height:100vh}
