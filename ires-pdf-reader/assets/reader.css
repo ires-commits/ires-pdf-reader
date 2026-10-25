@@ -28,3 +28,5 @@
 .ires-pdf-controls .ires-pdf-search{width:11rem;max-width:30vw}
 .ires-pdf-search-info{font-size:.78rem;min-width:0}
 @media(max-width:850px){.ires-pdf-controls{gap:.25rem}.ires-pdf-controls button{font-size:.82rem;padding:.3rem .4rem}.ires-pdf-controls .ires-pdf-search{max-width:42vw}}
+
+.ires-pdf-results-list{padding:.4rem;overflow:auto}.ires-pdf-results-list[hidden]{display:none!important}.ires-pdf-result{display:flex;flex-direction:column;gap:.3rem;text-align:left;width:100%;padding:.65rem;border:1px solid transparent;border-bottom-color:#e2e7ee;background:#fff;color:#20394d;cursor:pointer;font-size:.8rem;line-height:1.4;overflow-wrap:anywhere}.ires-pdf-result:hover,.ires-pdf-result.is-current{background:#eaf3fa;border-color:#a3c9e1}.ires-pdf-result strong{font-size:.8rem;color:#165b80}.ires-pdf-side-tabs button{font-size:.8rem;padding:.55rem .3rem}.ires-pdf-controls button[aria-label='Risultato precedente'],.ires-pdf-controls button[aria-label='Risultato successivo']{font-weight:700;padding:.3rem .55rem}
