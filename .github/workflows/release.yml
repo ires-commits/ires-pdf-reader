@@ -53,8 +53,8 @@ jobs:
           npm pack pdfjs-dist@3.11.174 --pack-destination /tmp
           mkdir -p ires-pdf-reader/vendor/pdfjs
           tar -xzf /tmp/pdfjs-dist-3.11.174.tgz -C /tmp package/build/pdf.min.js package/build/pdf.worker.min.js
-          cp /tmp/package/build/pdf.mjs ires-pdf-reader/vendor/pdfjs/pdf.min.js
-          cp /tmp/package/build/pdf.worker.mjs ires-pdf-reader/vendor/pdfjs/pdf.worker.min.js
+          cp /tmp/package/build/pdf.min.js ires-pdf-reader/vendor/pdfjs/pdf.min.js
+          cp /tmp/package/build/pdf.worker.min.js ires-pdf-reader/vendor/pdfjs/pdf.worker.min.js
       - name: Build ZIP
         if: steps.check.outputs.publish == 'true'
         shell: bash
