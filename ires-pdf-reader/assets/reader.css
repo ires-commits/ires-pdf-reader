@@ -81,3 +81,12 @@
 .ires-pdf-match-overlay.ires-pdf-note-highlight[data-color=green]{background:rgba(79,205,119,.38)}
 .ires-pdf-match-overlay.ires-pdf-note-highlight[data-color=blue]{background:rgba(70,167,244,.38)}
 .ires-pdf-match-overlay.ires-pdf-note-highlight[data-color=pink]{background:rgba(237,108,169,.38)}
+
+/* Keep the full research toolbar readable instead of overlapping controls. */
+.ires-pdf-controls{justify-content:flex-start;align-content:center;row-gap:8px}
+.ires-pdf-tool-group{min-width:0;flex-shrink:0}
+.ires-pdf-search-group{flex:1 1 240px;min-width:180px}
+.ires-pdf-search-group .ires-pdf-search{min-width:100px;flex:1 1 130px}
+.ires-pdf-actions-group{flex:1 1 auto;justify-content:flex-end}
+.ires-pdf-search-info{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:850px){.ires-pdf-actions-group{justify-content:flex-start}.ires-pdf-controls{padding:8px;gap:7px}}
