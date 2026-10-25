@@ -128,6 +128,12 @@ async function render(url,title,root,token){
    const epoch=++modeEpoch;
    const first=await doc.getPage(1);if(token!==session||epoch!==modeEpoch)return;
    const natural=first.getViewport({scale:1});
+   // On narrow touch screens start with the entire page fitting horizontally.
+   if(window.matchMedia('(max-width: 720px) and (pointer: coarse)').matches){
+    const fitScale=Math.max(.35,(viewport.clientWidth-24)/natural.width);
+    if(scale>fitScale)scale=fitScale;
+   }
+   zoomLabel.textContent=Math.round(scale/1.2*100)+'%';
    stack.replaceChildren();slots=[];
    const width=natural.width*scale,height=natural.height*scale;
    for(let n=1;n<=doc.numPages;n++){
@@ -137,7 +143,6 @@ async function render(url,title,root,token){
     const label=el('span','ires-pdf-page-number','Pagina '+n);
     slot.append(label);stack.append(slot);slots.push(slot);
    }
-   viewport.scrollTop=0;
    const selected=slots[Math.min(doc.numPages,Math.max(1,page))-1];
    if(selected)viewport.scrollTop=selected.offsetTop-stack.offsetTop;
    refreshVisible();
@@ -183,6 +188,7 @@ async function render(url,title,root,token){
    mode.setAttribute('aria-pressed',String(continuous));
    mode.textContent=continuous?'Singola':'Continuo';mode.title=continuous?'Passa alla pagina singola':'Passa allo scorrimento continuo';
    singlePage.hidden=continuous;stack.hidden=!continuous;
+   viewport.classList.toggle('ires-pdf-touch-continuous',continuous);
    if(continuous)setupContinuous().catch(fail);else{stack.replaceChildren();slots=[];schedule();}
   };
   fullscreen.onclick=async()=>{
