@@ -13,12 +13,18 @@
 .ires-pdf-controls button[aria-pressed=true]{background:#165b80;color:#fff}
 .ires-pdf-overlay:fullscreen{width:100vw;height:100vh}
 
-/* Selectable PDF text layer */
+/* PDF.js 3.x text layer: preserve exact PDF coordinates and transforms */
 .ires-pdf-single-page{position:relative;flex-shrink:0;background:#fff;box-shadow:0 3px 16px #0002}
 .ires-pdf-single-page[hidden]{display:none!important}
 .ires-pdf-single-page>canvas{display:block;box-shadow:none}
-.ires-pdf-page-slot{position:relative}
-.ires-pdf-text-layer{position:absolute;inset:0;overflow:hidden;opacity:1;line-height:1;text-align:initial;transform-origin:0 0;pointer-events:auto;--scale-factor:1}
+.ires-pdf-text-layer{position:absolute;inset:0;overflow:hidden;line-height:1;text-align:initial;pointer-events:auto;--scale-factor:1}
 .ires-pdf-text-layer span,.ires-pdf-text-layer br{position:absolute;color:transparent;white-space:pre;cursor:text;transform-origin:0% 0%}
+.ires-pdf-text-layer span{line-height:1}
 .ires-pdf-text-layer ::selection{background:rgba(25,115,210,.35)}
-.ires-pdf-text-layer mark.ires-pdf-highlight{background:rgba(255,202,40,.55);color:transparent;border-radius:2px}
+.ires-pdf-match-overlay{position:absolute;background:rgba(255,197,40,.55);pointer-events:none;border-radius:2px;z-index:2}
+.ires-pdf-controls{justify-content:flex-start;gap:.35rem;padding:.45rem .7rem;flex-wrap:wrap}
+.ires-pdf-controls button{font-size:.9rem;white-space:nowrap;padding:.35rem .55rem;min-height:34px}
+.ires-pdf-controls input{min-height:34px}
+.ires-pdf-controls .ires-pdf-search{width:11rem;max-width:30vw}
+.ires-pdf-search-info{font-size:.78rem;min-width:0}
+@media(max-width:850px){.ires-pdf-controls{gap:.25rem}.ires-pdf-controls button{font-size:.82rem;padding:.3rem .4rem}.ires-pdf-controls .ires-pdf-search{max-width:42vw}}
