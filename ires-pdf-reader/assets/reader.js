@@ -649,6 +649,25 @@ function open(url,title,button){
  active=overlay;document.body.style.overflow='hidden';document.addEventListener('keydown',keys);exit.focus();
  render(url,title,overlay,token,button&&button.dataset.citation||'');
 }
+// IRES Produzione Scientifica 1.43.51 renders its Preview link in a PHP template,
+// outside the_content. Reuse that exact link and preserve its original href as fallback.
+document.addEventListener('click',e=>{
+ const link=e.target.closest&&e.target.closest('.ires-ps-single a.ires-ps-pdf-preview');
+ if(!link||!config.scientificIntegration||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+ const url=link.href;
+ if(!url||!/^https?:\/\//i.test(url))return;
+ const section=link.closest('.ires-ps-single');
+ const title=section&&section.querySelector('.ires-ps-hero h1');
+ const authors=section&&section.querySelector('.ires-ps-authors');
+ const date=section&&section.querySelector('.ires-ps-hero-meta');
+ const heading=title?title.textContent.trim():'Documento PDF';
+ const authorText=authors?authors.textContent.replace(/\\s+/g,' ').trim():'';
+ const yearMatch=date&&date.textContent.match(/\\b(?:19|20)\\d{2}\\b/);
+ link.dataset.citation=(authorText?authorText+' ':'')+(yearMatch?'('+yearMatch[0]+'). ':'')+heading+'.';
+ e.preventDefault();
+ e.stopPropagation();
+ open(url,heading,link);
+},true);
 document.addEventListener('click',e=>{const button=e.target.closest('.ires-pdf-open');if(!button)return;const url=button.getAttribute('data-pdf');if(!url)return;e.preventDefault();open(url,button.getAttribute('data-title')||'Documento PDF',button);});
 // Open links from older versions as well as explicit auto-open links.
 function autoOpenSharedDocument(){
