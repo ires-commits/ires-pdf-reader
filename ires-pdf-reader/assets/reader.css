@@ -90,3 +90,8 @@
 .ires-pdf-actions-group{flex:1 1 auto;justify-content:flex-end}
 .ires-pdf-search-info{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:850px){.ires-pdf-actions-group{justify-content:flex-start}.ires-pdf-controls{padding:8px;gap:7px}}
+
+/* Voice controls: keep controls grouped and readable on narrow screens. */
+.ires-pdf-actions-group .ires-pdf-speech-rate{min-width:66px;max-width:78px;height:34px;padding:4px;border:1px solid #c9d3de;border-radius:6px;background:#fff;color:#18354d;font:inherit;font-size:12px}
+.ires-pdf-actions-group button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:720px){.ires-pdf-actions-group{flex-wrap:wrap;justify-content:flex-start;gap:5px}.ires-pdf-actions-group button{font-size:12px;padding:6px}}
