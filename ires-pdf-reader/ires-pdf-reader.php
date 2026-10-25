@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 1.2.2
+ * Version: 1.3.0
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
 final class IRES_PDF_Reader {
- const VERSION='1.2.2';
+ const VERSION='1.3.0';
  static function init() {
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
@@ -50,6 +50,7 @@ final class IRES_PDF_Reader {
  static function assets() {
   wp_enqueue_style('ires-pdf-reader',plugins_url('assets/reader.css',__FILE__),[],self::VERSION);
   wp_enqueue_script('ires-pdf-reader',plugins_url('assets/reader.js',__FILE__),[],self::VERSION,true);
+  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.mjs',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.mjs',__FILE__)]).';','before');
  }
  static function shortcode($atts) {
   $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF'],$atts,'ires_pdf_reader');
@@ -95,7 +96,8 @@ final class IRES_PDF_Reader {
   if(!$url){status_header(400);wp_die('PDF non valido o non autorizzato.');}
   $title=isset($_GET['title'])?sanitize_text_field(wp_unslash($_GET['title'])):'Documento PDF';
   nocache_headers();
-  ?><!doctype html><html <?php language_attributes(); ?>><head><meta charset="<?php bloginfo('charset'); ?>"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?php echo esc_html($title); ?></title><?php wp_head(); ?></head><body class="ires-pdf-dedicated"><header class="ires-pdf-dedicated-header"><strong><?php echo esc_html($title); ?></strong><a href="<?php echo esc_url($url); ?>" download>Scarica PDF</a></header><iframe title="<?php echo esc_attr($title); ?>" src="<?php echo esc_url($url); ?>"></iframe><?php wp_footer(); ?></body></html><?php
+  self::assets();
+  ?><!doctype html><html <?php language_attributes(); ?>><head><meta charset="<?php bloginfo('charset'); ?>"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?php echo esc_html($title); ?></title><?php wp_head(); ?></head><body class="ires-pdf-dedicated"><header class="ires-pdf-dedicated-header"><strong><?php echo esc_html($title); ?></strong><a href="<?php echo esc_url($url); ?>" download>Scarica PDF</a></header><main class="ires-pdf-dedicated-root" data-pdf="<?php echo esc_attr($url); ?>" data-title="<?php echo esc_attr($title); ?>"></main><?php wp_footer(); ?></body></html><?php
   exit;
  }
 }
