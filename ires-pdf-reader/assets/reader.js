@@ -88,32 +88,60 @@ async function render(url,title,root,token){
   const stack=el('div','ires-pdf-continuous');stack.hidden=true;viewport.append(stack);
   const dpr=()=>Math.min(window.devicePixelRatio||1,2);
   let searchTerm=linkedText;
-  let passageTerms=linkedText?linkedText.toLocaleLowerCase().split(/\s+/).filter(word=>word.length>=3).slice(0,24):[];
+  // A shared passage is one phrase, not a bag of words.
+  function paintRange(layer,startNode,startOffset,endNode,endOffset){
+   const range=document.createRange();
+   range.setStart(startNode,startOffset);range.setEnd(endNode,endOffset);
+   const bounds=layer.getBoundingClientRect();
+   for(const rect of range.getClientRects()){
+    if(!rect.width||!rect.height)continue;
+    const mark=el('div','ires-pdf-match-overlay');
+    mark.style.left=(rect.left-bounds.left)+'px';mark.style.top=(rect.top-bounds.top)+'px';
+    mark.style.width=rect.width+'px';mark.style.height=rect.height+'px';
+    layer.append(mark);
+   }
+  }
   function highlightText(layer){
    layer.querySelectorAll('.ires-pdf-match-overlay').forEach(node=>node.remove());
-   if(!searchTerm&&!passageTerms.length)return;
-   const terms=passageTerms.length?passageTerms:[searchTerm.toLocaleLowerCase()];
-   const spans=layer.querySelectorAll('span');
-   spans.forEach(span=>{
+   if(!searchTerm)return;
+   const holder=layer.closest('[data-page]');
+   if(linkedText&&holder&&Number(holder.dataset.page)!==fromHash)return;
+   if(linkedText&&!holder&&page!==fromHash)return;
+   const nodes=[];
+   layer.querySelectorAll('span').forEach(span=>{
     const walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);
-    const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
-    nodes.forEach(node=>{
-     const value=node.nodeValue.toLocaleLowerCase();
-     for(const term of terms){let start=0,index;
-     while((index=value.indexOf(term,start))!==-1){
-      const range=document.createRange();range.setStart(node,index);range.setEnd(node,index+term.length);
-      const bounds=layer.getBoundingClientRect();
-      for(const rect of range.getClientRects()){
-       if(!rect.width||!rect.height)continue;
-       const mark=el('div','ires-pdf-match-overlay');
-       mark.style.left=(rect.left-bounds.left)+'px';mark.style.top=(rect.top-bounds.top)+'px';
-       mark.style.width=rect.width+'px';mark.style.height=rect.height+'px';
-       layer.append(mark);
-      }
-      start=index+term.length;
-     }}
-    });
+    while(walker.nextNode())if(walker.currentNode.nodeValue)nodes.push(walker.currentNode);
    });
+   if(!nodes.length)return;
+   // Build a searchable text stream with a position map to the original PDF.js nodes.
+   let combined='',positions=[];
+   nodes.forEach((node,i)=>{
+    if(i){combined+=' ';positions.push(null);}
+    for(let j=0;j<node.nodeValue.length;j++){combined+=node.nodeValue[j];positions.push({node,offset:j});}
+   });
+   const normalized=combined.toLocaleLowerCase();
+   if(linkedText){
+    const words=linkedText.trim().split(/\\s+/).filter(Boolean);
+    if(!words.length)return;
+    const pattern=words.map(w=>w.replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')).join('\\s+');
+    let match;
+    try{match=new RegExp(pattern,'iu').exec(normalized);}catch(_error){return;}
+    if(!match)return;
+    let start=match.index,end=start+match[0].length-1;
+    while(start<end&&!positions[start])start++;
+    while(end>start&&!positions[end])end--;
+    if(positions[start]&&positions[end])paintRange(layer,positions[start].node,positions[start].offset,positions[end].node,positions[end].offset+1);
+    return;
+   }
+   const term=searchTerm.toLocaleLowerCase();
+   let index=0;
+   while((index=normalized.indexOf(term,index))!==-1){
+    let start=index,end=index+term.length-1;
+    while(start<end&&!positions[start])start++;
+    while(end>start&&!positions[end])end--;
+    if(positions[start]&&positions[end])paintRange(layer,positions[start].node,positions[start].offset,positions[end].node,positions[end].offset+1);
+    index+=Math.max(1,term.length);
+   }
   }
   async function addTextLayer(pdfPage,holder,view,epoch){
    const layer=holder.querySelector('.ires-pdf-text-layer');
@@ -285,14 +313,27 @@ async function render(url,title,root,token){
    try{await navigator.clipboard.writeText(value);const label=button.textContent;button.textContent='Copiato ✓';setTimeout(()=>{if(button.isConnected)button.textContent=label;},1600);}
    catch(_error){window.prompt('Copia:',value);}
   }
-  function selectedPassage(){
+  let cachedSelection='';
+  function readSelection(){
    const selection=window.getSelection();
-   if(!selection||selection.isCollapsed||!root.contains(selection.anchorNode)||!root.contains(selection.focusNode))return '';
+   if(!selection||selection.isCollapsed||!selection.anchorNode||!selection.focusNode)return '';
+   if(!root.contains(selection.anchorNode)||!root.contains(selection.focusNode))return '';
    const anchor=selection.anchorNode.nodeType===1?selection.anchorNode:selection.anchorNode.parentElement;
    const focus=selection.focusNode.nodeType===1?selection.focusNode:selection.focusNode.parentElement;
-   if(!anchor.closest('.ires-pdf-text-layer')||!focus.closest('.ires-pdf-text-layer'))return '';
+   if(!anchor||!focus||!anchor.closest('.ires-pdf-text-layer')||!focus.closest('.ires-pdf-text-layer'))return '';
    return selection.toString().replace(/\\s+/g,' ').trim().slice(0,200);
   }
+  function selectedPassage(){return readSelection()||cachedSelection;}
+  // Mobile browsers often collapse the native selection when the toolbar receives focus.
+  document.addEventListener('selectionchange',()=>{
+   if(token!==session)return;
+   const selected=readSelection();
+   if(selected)cachedSelection=selected;
+  });
+  [passage,cite].forEach(button=>{
+   button.addEventListener('pointerdown',()=>{const selected=readSelection();if(selected)cachedSelection=selected;},{passive:true});
+   button.addEventListener('touchstart',()=>{const selected=readSelection();if(selected)cachedSelection=selected;},{passive:true});
+  });
   function pageUrl(text){
    const link=new URL(config.dedicatedUrl||location.origin+'/');
    link.searchParams.set('ires_pdf_reader','1');
@@ -373,7 +414,7 @@ async function render(url,title,root,token){
   find.onclick=searchDocument;
   prevMatch.onclick=()=>showMatch(matchIndex-1);
   nextMatch.onclick=()=>showMatch(matchIndex+1);
-  search.addEventListener('input',()=>{passageTerms=[];searchRun++;matches=[];matchIndex=-1;searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);resultsList.replaceChildren();searchInfo.textContent='';prevMatch.disabled=true;nextMatch.disabled=true;find.disabled=false;});
+  search.addEventListener('input',()=>{searchRun++;matches=[];matchIndex=-1;searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);resultsList.replaceChildren();searchInfo.textContent='';prevMatch.disabled=true;nextMatch.disabled=true;find.disabled=false;});
   search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(matches.length&&searchTerm===search.value.trim())showMatch(matchIndex+(e.shiftKey?-1:1));else searchDocument();}});
   share.onclick=()=>copyValue(pageUrl(''),share);
   viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
