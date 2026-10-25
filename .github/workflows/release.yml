@@ -1,26 +1,67 @@
-name: Release WordPress plugin
+name: Publish validated WordPress release
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_run:
+    workflows:
+      - Validate plugin
+    types:
+      - completed
 permissions:
   contents: write
 jobs:
-  package:
+  release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Validate version and PHP
+      - name: Checkout validated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Read and validate version
+        id: version
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          test -f ires-pdf-reader/ires-pdf-reader.php
-          grep -Fq "Version: ${VERSION}" ires-pdf-reader/ires-pdf-reader.php
-          find ires-pdf-reader -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: Package
-        run: zip -qr ires-pdf-reader.zip ires-pdf-reader -x '*.DS_Store' '*__MACOSX*'
-      - name: Publish release
+          PLUGIN="ires-pdf-reader/ires-pdf-reader.php"
+          VERSION="$(sed -nE 's/^ \* Version: ([0-9]+\.[0-9]+\.[0-9]+).*$/\1/p' "$PLUGIN" | head -n1)"
+          test -n "$VERSION"
+          grep -Fq "const VERSION='$VERSION';" "$PLUGIN"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Ensure release does not already exist
+        id: check
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" ires-pdf-reader.zip --generate-notes --verify-tag
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag exists without a release; manual investigation required." >&2
+            exit 1
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+      - name: Build ZIP
+        if: steps.check.outputs.publish == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          find ires-pdf-reader -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          node --check ires-pdf-reader/assets/reader.js
+          zip -qr ires-pdf-reader.zip ires-pdf-reader -x '*.DS_Store' '*__MACOSX*'
+          unzip -t ires-pdf-reader.zip
+      - name: Create tag and publish release
+        if: steps.check.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA"
+          gh release create "$TAG" ires-pdf-reader.zip --target "$SHA" --title "IRES PDF Reader ${TAG#v}" --generate-notes --verify-tag
