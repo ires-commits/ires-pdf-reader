@@ -36,12 +36,13 @@ async function render(url,title,root,token){
  const actionsGroup=el('div','ires-pdf-tool-group ires-pdf-actions-group');
  const bookmark=el('button','','☆ Segnalibro');bookmark.type='button';bookmark.title='Salva un segnalibro personale';
  const cite=el('button','','Citazione');cite.type='button';cite.title='Copia una citazione del documento';
+ const annotate=el('button','','Evidenzia / Nota');annotate.type='button';annotate.title='Annota il testo selezionato';
  const passage=el('button','','Link passaggio');passage.type='button';passage.title='Copia un link alla pagina e al testo selezionato';
  navGroup.append(previous,current,total,next);
  zoomGroup.append(minus,zoomLabel,plus,fit);
  viewGroup.append(sidebarToggle,mode,fullscreen);
  searchGroup.append(search,find,prevMatch,nextMatch,searchInfo);
- actionsGroup.append(bookmark,passage,cite,share);
+ actionsGroup.append(bookmark,annotate,passage,cite,share);
  toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,searchGroup,actionsGroup);
  toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Strumenti lettore PDF');
  sidebarToggle.textContent='☰';sidebarToggle.title='Pannello pagine';sidebarToggle.setAttribute('aria-label','Apri o chiudi il pannello laterale');
@@ -60,14 +61,17 @@ async function render(url,title,root,token){
  const resultsList=el('div','ires-pdf-results-list');resultsList.hidden=true;
  const bookmarksTab=el('button','','Segnalibri');bookmarksTab.type='button';
  const bookmarksList=el('div','ires-pdf-bookmarks-list');bookmarksList.hidden=true;
- tabs.append(thumbsTab,outlineTab,resultsTab,bookmarksTab);sidebar.append(tabs,thumbList,outlineList,resultsList,bookmarksList);
+ const notesTab=el('button','','Note');notesTab.type='button';
+ const notesList=el('div','ires-pdf-notes-list');notesList.hidden=true;
+ tabs.append(thumbsTab,outlineTab,resultsTab,bookmarksTab,notesTab);sidebar.append(tabs,thumbList,outlineList,resultsList,bookmarksList,notesList);
  const viewport=el('div','ires-pdf-pages');const singlePage=el('div','ires-pdf-single-page');const canvas=el('canvas');const singleText=el('div','ires-pdf-text-layer');singlePage.append(canvas,singleText);viewport.append(singlePage);
  workspace.append(sidebar,viewport);content.append(toolbar,workspace);
  sidebarToggle.onclick=()=>{sidebar.hidden=!sidebar.hidden;sidebarToggle.setAttribute('aria-expanded',String(!sidebar.hidden));if(!sidebar.hidden&&typeof loadThumbnails==='function'&&thumbCount===0)loadThumbnails();};
- thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;};
+ thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=true;};
  outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;resultsList.hidden=true;bookmarksList.hidden=true;};
  resultsTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=false;bookmarksList.hidden=true;};
- bookmarksTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=false;};
+ bookmarksTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=false;notesList.hidden=true;};
+ notesTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=false;};
  try{
   if(!config.pdfjsUrl||!config.workerUrl)throw Error('Libreria PDF.js non configurata');
   const pdfjs=window.pdfjsLib;
@@ -103,10 +107,10 @@ async function render(url,title,root,token){
   }
   function highlightText(layer){
    layer.querySelectorAll('.ires-pdf-match-overlay').forEach(node=>node.remove());
-   if(!searchTerm)return;
+   if(!searchTerm&&!annotations.length)return;
    const holder=layer.closest('[data-page]');
-   if(linkedText&&holder&&Number(holder.dataset.page)!==fromHash)return;
-   if(linkedText&&!holder&&page!==fromHash)return;
+   if(linkedText&&holder&&Number(holder.dataset.page)!==fromHash&&searchTerm)return;
+   if(linkedText&&!holder&&page!==fromHash&&searchTerm)return;
    const nodes=[];
    layer.querySelectorAll('span').forEach(span=>{
     const walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);
@@ -120,6 +124,20 @@ async function render(url,title,root,token){
     for(let j=0;j<node.nodeValue.length;j++){combined+=node.nodeValue[j];positions.push({node,offset:j});}
    });
    const normalized=combined.toLocaleLowerCase();
+   const visiblePage=holder?Number(holder.dataset.page):page;
+   for(const note of annotations.filter(x=>x.page===visiblePage)){
+    const phrase=note.text.toLocaleLowerCase();const index=normalized.indexOf(phrase);
+    if(index<0)continue;
+    let start=index,end=index+phrase.length-1;
+    while(start<end&&!positions[start])start++;
+    while(end>start&&!positions[end])end--;
+    if(positions[start]&&positions[end]){
+     const before=layer.querySelectorAll('.ires-pdf-match-overlay').length;
+     paintRange(layer,positions[start].node,positions[start].offset,positions[end].node,positions[end].offset+1);
+     [...layer.querySelectorAll('.ires-pdf-match-overlay')].slice(before).forEach(mark=>{mark.classList.add('ires-pdf-note-highlight');mark.dataset.color=note.color;mark.title=note.note||note.text;});
+    }
+   }
+   if(!searchTerm)return;
    if(linkedText){
     const words=linkedText.trim().split(/\\s+/).filter(Boolean);
     if(!words.length)return;
@@ -330,7 +348,7 @@ async function render(url,title,root,token){
    const selected=readSelection();
    if(selected)cachedSelection=selected;
   });
-  [passage,cite].forEach(button=>{
+  [passage,cite,annotate].forEach(button=>{
    button.addEventListener('pointerdown',()=>{const selected=readSelection();if(selected)cachedSelection=selected;},{passive:true});
    button.addEventListener('touchstart',()=>{const selected=readSelection();if(selected)cachedSelection=selected;},{passive:true});
   });
@@ -351,6 +369,62 @@ async function render(url,title,root,token){
    copyValue(citation,cite);
   };
   if(linkedText){search.value=linkedText;searchInfo.textContent='Passaggio condiviso';}
+  const annotationKey='ires-pdf-annotations:v1:'+url;
+  let annotations=[];
+  try{const stored=JSON.parse(localStorage.getItem(annotationKey)||'[]');if(Array.isArray(stored))annotations=stored.filter(x=>Number.isInteger(x.page)&&typeof x.text==='string'&&x.text.length<=200&&typeof x.note==='string'&&x.note.length<=2000&&['yellow','green','blue','pink'].includes(x.color)).slice(0,500);}catch(_error){}
+  function saveAnnotations(){
+   try{localStorage.setItem(annotationKey,JSON.stringify(annotations));}
+   catch(_error){window.alert('Impossibile salvare le annotazioni. Esportale per non perderle.');}
+  }
+  function refreshAnnotations(){
+   root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);
+   notesList.replaceChildren();
+   const controls=el('div','ires-pdf-note-controls');
+   const exportButton=el('button','','Esporta JSON');exportButton.type='button';
+   exportButton.onclick=()=>{
+    const blob=new Blob([JSON.stringify({format:'ires-pdf-notes-v1',url,annotations},null,2)],{type:'application/json'});
+    const objectUrl=URL.createObjectURL(blob);const a=el('a');a.href=objectUrl;a.download='ires-pdf-annotazioni.json';a.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+   };
+   const importButton=el('button','','Importa JSON');importButton.type='button';
+   const fileInput=el('input');fileInput.type='file';fileInput.accept='.json,application/json';fileInput.hidden=true;
+   importButton.onclick=()=>fileInput.click();
+   fileInput.onchange=async()=>{
+    const file=fileInput.files&&fileInput.files[0];if(!file)return;
+    try{
+     if(file.size>1024*1024)throw Error('File troppo grande');
+     const data=JSON.parse(await file.text());
+     if(data.format!=='ires-pdf-notes-v1'||data.url!==url||!Array.isArray(data.annotations))throw Error('File non compatibile con questo PDF');
+     const valid=data.annotations.filter(x=>Number.isInteger(x.page)&&x.page>=1&&x.page<=doc.numPages&&typeof x.text==='string'&&x.text.length>0&&x.text.length<=200&&typeof x.note==='string'&&x.note.length<=2000&&['yellow','green','blue','pink'].includes(x.color)).slice(0,500);
+     annotations=valid;saveAnnotations();refreshAnnotations();
+    }catch(error){window.alert('Importazione non riuscita: '+error.message);}
+   };
+   controls.append(exportButton,importButton,fileInput);notesList.append(controls);
+   if(!annotations.length)notesList.append(el('p','ires-pdf-empty','Nessuna annotazione.'));
+   annotations.forEach((item,index)=>{
+    const row=el('div','ires-pdf-note-row');
+    const jump=el('button','ires-pdf-note-jump','Pagina '+item.page+' · '+item.text);jump.type='button';
+    jump.onclick=()=>{page=item.page;navigate();};
+    const body=el('p','',item.note||'Solo evidenziazione');
+    const edit=el('button','','Modifica');edit.type='button';
+    edit.onclick=()=>{const value=window.prompt('Nota personale:',item.note);if(value===null)return;item.note=value.slice(0,2000);saveAnnotations();refreshAnnotations();};
+    const remove=el('button','','Elimina');remove.type='button';
+    remove.onclick=()=>{if(!window.confirm('Eliminare questa annotazione?'))return;annotations.splice(index,1);saveAnnotations();refreshAnnotations();};
+    row.dataset.color=item.color;row.append(jump,body,edit,remove);notesList.append(row);
+   });
+  }
+  annotate.onclick=()=>{
+   const selected=selectedPassage();
+   if(!selected){window.alert('Seleziona un passaggio del PDF prima di annotarlo.');return;}
+   const color=window.prompt('Colore: yellow, green, blue o pink','yellow');
+   if(color===null)return;
+   if(!['yellow','green','blue','pink'].includes(color.toLowerCase())){window.alert('Colore non valido.');return;}
+   const note=window.prompt('Nota (facoltativa):','');if(note===null)return;
+   if(annotations.length>=500){window.alert('Limite di 500 annotazioni raggiunto.');return;}
+   annotations.push({page,text:selected,color:color.toLowerCase(),note:note.slice(0,2000)});
+   saveAnnotations();refreshAnnotations();sidebar.hidden=false;sidebarToggle.setAttribute('aria-expanded','true');notesTab.click();
+   cachedSelection='';
+  };
+  refreshAnnotations();
   let matches=[],matchIndex=-1,searchRun=0;
   function updateMatchUI(){
    const count=matches.length;
