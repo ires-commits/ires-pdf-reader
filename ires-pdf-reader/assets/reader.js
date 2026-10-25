@@ -19,9 +19,11 @@ async function render(url,title,root,token){
  const fit=el('button','','Adatta');fit.type='button';fit.setAttribute('aria-label','Adatta alla larghezza');
  const search=el('input','ires-pdf-search');search.type='search';search.placeholder='Cerca nel documento';search.setAttribute('aria-label','Cerca testo nel PDF');
  const find=el('button','','Cerca');find.type='button';find.setAttribute('aria-label','Cerca nel documento');
+ const prevMatch=el('button','','↑');prevMatch.type='button';prevMatch.title='Risultato precedente';prevMatch.setAttribute('aria-label','Risultato precedente');
+ const nextMatch=el('button','','↓');nextMatch.type='button';nextMatch.title='Risultato successivo';nextMatch.setAttribute('aria-label','Risultato successivo');
  const searchInfo=el('span','ires-pdf-search-info');searchInfo.setAttribute('role','status');
  const share=el('button','','Condividi pagina');share.type='button';share.setAttribute('aria-label','Copia collegamento alla pagina corrente');
- toolbar.append(previous,current,total,next,minus,zoomLabel,plus,fit,share,search,find,searchInfo);
+ toolbar.append(previous,current,total,next,minus,zoomLabel,plus,fit,share,search,find,prevMatch,nextMatch,searchInfo);
  const mode=el('button','','Scorrimento continuo');mode.type='button';mode.setAttribute('aria-pressed','false');
  const fullscreen=el('button','','Schermo intero');fullscreen.type='button';
  toolbar.prepend(mode,fullscreen);
@@ -33,12 +35,15 @@ async function render(url,title,root,token){
  const thumbsTab=el('button','','Miniature');thumbsTab.type='button';
  const outlineTab=el('button','','Indice');outlineTab.type='button';
  const thumbList=el('div','ires-pdf-thumb-list');const outlineList=el('div','ires-pdf-outline-list');outlineList.hidden=true;
- tabs.append(thumbsTab,outlineTab);sidebar.append(tabs,thumbList,outlineList);
+ const resultsTab=el('button','','Risultati');resultsTab.type='button';
+ const resultsList=el('div','ires-pdf-results-list');resultsList.hidden=true;
+ tabs.append(thumbsTab,outlineTab,resultsTab);sidebar.append(tabs,thumbList,outlineList,resultsList);
  const viewport=el('div','ires-pdf-pages');const singlePage=el('div','ires-pdf-single-page');const canvas=el('canvas');const singleText=el('div','ires-pdf-text-layer');singlePage.append(canvas,singleText);viewport.append(singlePage);
  workspace.append(sidebar,viewport);content.append(toolbar,workspace);
  sidebarToggle.onclick=()=>{sidebar.hidden=!sidebar.hidden;sidebarToggle.setAttribute('aria-expanded',String(!sidebar.hidden));if(!sidebar.hidden&&typeof loadThumbnails==='function'&&thumbCount===0)loadThumbnails();};
- thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;};
- outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;};
+ thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;resultsList.hidden=true;};
+ outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;resultsList.hidden=true;};
+ resultsTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=false;};
  try{
   if(!config.pdfjsUrl||!config.workerUrl)throw Error('Libreria PDF.js non configurata');
   const pdfjs=window.pdfjsLib;
@@ -212,30 +217,71 @@ async function render(url,title,root,token){
   minus.onclick=()=>{scale=Math.max(.6,scale-.2);zoomChanged();};
   plus.onclick=()=>{scale=Math.min(3,scale+.2);zoomChanged();};
   fit.onclick=()=>{const available=Math.max(240,viewport.clientWidth-32);doc.getPage(page).then(p=>{scale=Math.min(3,Math.max(.4,available/p.getViewport({scale:1}).width));zoomChanged();}).catch(fail);};
-  let searching=false;
+  let matches=[],matchIndex=-1,searchRun=0;
+  function updateMatchUI(){
+   const count=matches.length;
+   searchInfo.textContent=count?(matchIndex+1)+' / '+count+' risultati':'Nessun risultato';
+   prevMatch.disabled=nextMatch.disabled=!count;
+   resultsList.querySelectorAll('.ires-pdf-result').forEach((node,i)=>node.classList.toggle('is-current',i===matchIndex));
+  }
+  function showMatch(index){
+   if(!matches.length)return;
+   matchIndex=(index+matches.length)%matches.length;
+   page=matches[matchIndex].page;
+   navigate();updateMatchUI();
+   const selected=resultsList.querySelectorAll('.ires-pdf-result')[matchIndex];
+   if(selected)selected.scrollIntoView({block:'nearest'});
+  }
   async function searchDocument(){
-   const query=search.value.trim().toLocaleLowerCase();if(!query||searching)return;
-   searching=true;find.disabled=true;searchInfo.textContent='Ricerca in corso…';
+   const query=search.value.trim();
+   const run=++searchRun;
+   matches=[];matchIndex=-1;resultsList.replaceChildren();
+   searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);
+   if(!query){searchInfo.textContent='';return;}
+   find.disabled=true;prevMatch.disabled=true;nextMatch.disabled=true;
+   searchInfo.textContent='Ricerca in corso…';
+   const needle=query.toLocaleLowerCase();
    try{
-    for(let step=1;step<=doc.numPages;step++){
-     if(token!==session)return;
-     const n=((page-1+step)%doc.numPages)+1;
-     const pdfPage=await doc.getPage(n);
-     const textContent=await pdfPage.getTextContent();
-     const text=textContent.items.map(item=>item.str||'').join(' ').toLocaleLowerCase();
-     if(text.includes(query)){
-      searchTerm=search.value.trim();
-      root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);
-      page=n;navigate();searchInfo.textContent='Trovato a pagina '+n;return;
+    for(let n=1;n<=doc.numPages;n++){
+     if(token!==session||run!==searchRun)return;
+     const p=await doc.getPage(n),data=await p.getTextContent();
+     if(token!==session||run!==searchRun)return;
+     const full=data.items.map(item=>item.str||'').join(' ');
+     const normalized=full.toLocaleLowerCase();
+     let pos=0,index;
+     while((index=normalized.indexOf(needle,pos))!==-1){
+      const before=full.slice(Math.max(0,index-45),index).replace(/\\s+/g,' ');
+      const hit=full.slice(index,index+query.length);
+      const after=full.slice(index+query.length,index+query.length+55).replace(/\\s+/g,' ');
+      matches.push({page:n,snippet:(before+hit+after).trim()});
+      pos=index+Math.max(needle.length,1);
      }
     }
-    searchInfo.textContent='Nessuna corrispondenza';
-   }catch(error){searchInfo.textContent='Ricerca non disponibile';console.warn('IRES PDF Reader search',error);}
-   finally{searching=false;find.disabled=false;}
+    if(token!==session||run!==searchRun)return;
+    searchTerm=query;
+    root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);
+    const fragment=document.createDocumentFragment();
+    matches.forEach((match,i)=>{
+     const item=el('button','ires-pdf-result');
+     item.type='button';item.append(el('strong','','Pagina '+match.page),el('span','',match.snippet));
+     item.onclick=()=>showMatch(i);fragment.append(item);
+    });
+    resultsList.append(fragment);
+    if(matches.length){
+     sidebar.hidden=false;sidebarToggle.setAttribute('aria-expanded','true');
+     resultsTab.click();
+     const initial=matches.findIndex(item=>item.page>=page);
+     showMatch(initial>=0?initial:0);
+    }else updateMatchUI();
+   }catch(error){
+    if(run===searchRun){searchInfo.textContent='Ricerca non disponibile';console.warn('IRES PDF Reader search',error);}
+   }finally{if(run===searchRun)find.disabled=false;}
   }
   find.onclick=searchDocument;
-  search.addEventListener('input',()=>{if(!search.value.trim()){searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);searchInfo.textContent='';}});
-  search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchDocument();}});
+  prevMatch.onclick=()=>showMatch(matchIndex-1);
+  nextMatch.onclick=()=>showMatch(matchIndex+1);
+  search.addEventListener('input',()=>{searchRun++;matches=[];matchIndex=-1;searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);resultsList.replaceChildren();searchInfo.textContent='';prevMatch.disabled=true;nextMatch.disabled=true;find.disabled=false;});
+  search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(matches.length&&searchTerm===search.value.trim())showMatch(matchIndex+(e.shiftKey?-1:1));else searchDocument();}});
   share.onclick=async()=>{const link=new URL(location.href);link.hash='page='+page;try{await navigator.clipboard.writeText(link.href);share.textContent='Link copiato';setTimeout(()=>{share.textContent='Condividi pagina';},1800);}catch(_error){window.prompt('Copia il collegamento:',link.href);}};
   viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
   viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();previous.click();}});
