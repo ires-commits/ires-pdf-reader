@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
 final class IRES_PDF_Reader {
- const VERSION='1.3.1';
+ const VERSION='1.3.2';
  static function init() {
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
@@ -32,7 +32,15 @@ final class IRES_PDF_Reader {
   echo '<input type="hidden" name="ires_pdf_reader_integration" value="0">';
   echo '<p><label><input type="checkbox" name="ires_pdf_reader_integration" value="1" '.checked(get_option('ires_pdf_reader_integration',true),true,false).'> Integrazione automatica nelle pubblicazioni</label></p>';
   echo '<p><label>Chiave campo PDF ACF: <input name="ires_pdf_reader_meta_key" value="'.esc_attr(get_option('ires_pdf_reader_meta_key','')).'"></label></p>';
-  submit_button();echo '</form></div>';
+  submit_button();echo '</form>';
+  $diag=IRES_PDF_GitHub_Updater::diagnostics();
+  echo '<hr><h2>Diagnostica aggiornamenti GitHub</h2>';
+  echo '<p>Versione installata: <strong>'.esc_html(self::VERSION).'</strong></p>';
+  echo '<p>Ultima release GitHub: <strong>'.esc_html($diag['release']['version']??'Non disponibile').'</strong></p>';
+  echo '<p>Aggiornamento rilevato da WordPress: <strong>'.($diag['detected']?'Si':'No').'</strong></p>';
+  echo '<p>Ultimo controllo WordPress: '.($diag['checked']?esc_html(wp_date('d/m/Y H:i:s',$diag['checked'])):'Mai').'</p>';
+  if(current_user_can('update_plugins'))echo '<p><a class="button button-secondary" href="'.esc_url(wp_nonce_url(admin_url('admin-post.php?action=ires_pdf_check_updates'),'ires_pdf_check_updates')).'">Controlla aggiornamenti adesso</a></p>';
+  echo '</div>';
  }
  static function valid_pdf($url) {
   if(!is_string($url)||strlen($url)>4096)return '';
