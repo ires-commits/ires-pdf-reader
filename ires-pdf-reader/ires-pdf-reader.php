@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 1.6.0
+ * Version: 1.6.1
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
 final class IRES_PDF_Reader {
- const VERSION='1.6.0';
+ const VERSION='1.6.1';
  static function init() {
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
@@ -42,7 +42,7 @@ final class IRES_PDF_Reader {
   if(current_user_can('update_plugins'))echo '<p><a class="button button-secondary" href="'.esc_url(wp_nonce_url(admin_url('admin-post.php?action=ires_pdf_check_updates'),'ires_pdf_check_updates')).'">Controlla aggiornamenti adesso</a></p>';
   if(isset($_GET['ires_pdf_upgrade'])) {
    $state=sanitize_key(wp_unslash($_GET['ires_pdf_upgrade']));
-   $messages=['success'=>'Aggiornamento completato.','failed'=>'Aggiornamento non riuscito: controlla i log del server e la pagina Plugin.','current'=>'Il plugin e gia aggiornato.','unavailable'=>'Impossibile leggere la release GitHub.','busy'=>'Un aggiornamento e gia in corso.'];
+   $messages=['success'=>'Aggiornamento completato.','failed'=>'Aggiornamento non riuscito: controlla i log del server e la pagina Plugin.','current'=>'Il plugin e gia aggiornato.','unavailable'=>'Impossibile leggere la release GitHub.','busy'=>'Un aggiornamento e gia in corso.','activation_failed'=>'File aggiornati, ma la riattivazione automatica non e riuscita: verifica la pagina Plugin.'];
    if(isset($messages[$state]))echo '<div class="notice '.($state==='success'?'notice-success':'notice-warning').'"><p>'.esc_html($messages[$state]).'</p></div>';
   }
   $remote=$diag['release']['version']??'';
