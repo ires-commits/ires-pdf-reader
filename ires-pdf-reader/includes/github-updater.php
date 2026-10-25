@@ -9,6 +9,7 @@ final class IRES_PDF_GitHub_Updater {
   add_filter('plugins_api', [__CLASS__, 'info'], 10, 3);
   add_filter('update_plugins_github.com', [__CLASS__, 'update_by_uri'], 10, 4);
   add_action('admin_post_ires_pdf_check_updates', [__CLASS__, 'force_check']);
+  add_action('admin_post_ires_pdf_install_update', [__CLASS__, 'install_update']);
   add_action('upgrader_process_complete', [__CLASS__, 'clear_cache_after_upgrade'], 10, 2);
  }
  static function force_check() {
@@ -19,6 +20,39 @@ final class IRES_PDF_GitHub_Updater {
   wp_update_plugins();
   wp_safe_redirect(add_query_arg('ires_pdf_checked','1',admin_url('options-general.php?page=ires-pdf-reader')));
   exit;
+ }
+ static function install_update() {
+  if (!current_user_can('update_plugins')) wp_die('Permessi insufficienti.');
+  check_admin_referer('ires_pdf_install_update');
+  $return=admin_url('options-general.php?page=ires-pdf-reader');
+  if (get_transient('ires_pdf_reader_upgrade_lock')) {
+   wp_safe_redirect(add_query_arg('ires_pdf_upgrade','busy',$return));exit;
+  }
+  set_transient('ires_pdf_reader_upgrade_lock',1,10*MINUTE_IN_SECONDS);
+  delete_transient(self::CACHE);
+  delete_site_transient('update_plugins');
+  wp_update_plugins();
+  $plugin='ires-pdf-reader/ires-pdf-reader.php';
+  $release=self::release();
+  if (!$release || !isset($release['version']) || !preg_match('/^\\d+\\.\\d+\\.\\d+$/',$release['version'])) {
+   delete_transient('ires_pdf_reader_upgrade_lock');
+   wp_safe_redirect(add_query_arg('ires_pdf_upgrade','unavailable',$return));exit;
+  }
+  $installed=get_plugin_data(WP_PLUGIN_DIR.'/'.$plugin,false,false);
+  $old=$installed['Version']??'0';
+  if (!version_compare($release['version'],$old,'>')) {
+   delete_transient('ires_pdf_reader_upgrade_lock');
+   wp_safe_redirect(add_query_arg('ires_pdf_upgrade','current',$return));exit;
+  }
+  require_once ABSPATH.'wp-admin/includes/class-wp-upgrader.php';
+  $skin=new Automatic_Upgrader_Skin();
+  $upgrader=new Plugin_Upgrader($skin);
+  $result=$upgrader->upgrade($plugin);
+  wp_clean_plugins_cache(true);
+  $new=is_file(WP_PLUGIN_DIR.'/'.$plugin)?get_plugin_data(WP_PLUGIN_DIR.'/'.$plugin,false,false):[];
+  $ok=!is_wp_error($result) && $result!==false && !empty($new['Version']) && version_compare($new['Version'],$old,'>') && version_compare($new['Version'],$release['version'],'>=');
+  delete_transient('ires_pdf_reader_upgrade_lock');
+  wp_safe_redirect(add_query_arg('ires_pdf_upgrade',$ok?'success':'failed',$return));exit;
  }
  static function diagnostics() {
   $release=self::release();
