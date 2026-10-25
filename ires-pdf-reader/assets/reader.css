@@ -12,3 +12,13 @@
 .ires-pdf-page-number{position:absolute;bottom:0;right:0;padding:3px 8px;background:#eef2f7;color:#3c5265;font-size:11px;opacity:.85;z-index:1}
 .ires-pdf-controls button[aria-pressed=true]{background:#165b80;color:#fff}
 .ires-pdf-overlay:fullscreen{width:100vw;height:100vh}
+
+/* Selectable PDF text layer */
+.ires-pdf-single-page{position:relative;flex-shrink:0;background:#fff;box-shadow:0 3px 16px #0002}
+.ires-pdf-single-page[hidden]{display:none!important}
+.ires-pdf-single-page>canvas{display:block;box-shadow:none}
+.ires-pdf-page-slot{position:relative}
+.ires-pdf-text-layer{position:absolute;inset:0;overflow:hidden;opacity:1;line-height:1;text-align:initial;transform-origin:0 0;pointer-events:auto;--scale-factor:1}
+.ires-pdf-text-layer span,.ires-pdf-text-layer br{position:absolute;color:transparent;white-space:pre;cursor:text;transform-origin:0% 0%}
+.ires-pdf-text-layer ::selection{background:rgba(25,115,210,.35)}
+.ires-pdf-text-layer mark.ires-pdf-highlight{background:rgba(255,202,40,.55);color:transparent;border-radius:2px}
