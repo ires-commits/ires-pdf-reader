@@ -1,9 +1,10 @@
 (function(){
 'use strict';
 let active=null,lastFocus=null,session=0;
+let stopSpeech=()=>{};
 const config=window.iresPdfReader||{};
 function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;}
-function close(){session++;if(!active)return;active.remove();active=null;document.body.style.overflow='';document.removeEventListener('keydown',keys);if(lastFocus&&lastFocus.focus)lastFocus.focus();}
+function close(){stopSpeech();session++;if(!active)return;active.remove();active=null;document.body.style.overflow='';document.removeEventListener('keydown',keys);if(lastFocus&&lastFocus.focus)lastFocus.focus();}
 function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){const controls=[...active.querySelectorAll('a,button,input')].filter(x=>!x.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
 async function render(url,title,root,token){
  const content=el('div','ires-pdf-viewer');root.append(content);
@@ -37,12 +38,17 @@ async function render(url,title,root,token){
  const bookmark=el('button','','☆ Segnalibro');bookmark.type='button';bookmark.title='Salva un segnalibro personale';
  const cite=el('button','','Citazione');cite.type='button';cite.title='Copia una citazione del documento';
  const annotate=el('button','','Evidenzia / Nota');annotate.type='button';annotate.title='Annota il testo selezionato';
+ const speech=el('button','','Ascolta');speech.type='button';speech.title='Leggi ad alta voce il testo selezionato o dalla pagina corrente';
+ const speechPause=el('button','','Pausa');speechPause.type='button';speechPause.title='Metti in pausa o riprendi';
+ const speechStop=el('button','','Stop voce');speechStop.type='button';
+ const speechRate=el('select','ires-pdf-speech-rate');speechRate.setAttribute('aria-label','Velocità lettura');
+ [['0.75','0,75×'],['1','1×'],['1.25','1,25×'],['1.5','1,5×'],['2','2×']].forEach(([value,label])=>{const option=el('option','',label);option.value=value;speechRate.append(option);});speechRate.value='1';
  const passage=el('button','','Link passaggio');passage.type='button';passage.title='Copia un link alla pagina e al testo selezionato';
  navGroup.append(previous,current,total,next);
  zoomGroup.append(minus,zoomLabel,plus,fit);
  viewGroup.append(sidebarToggle,mode,fullscreen);
  searchGroup.append(search,find,prevMatch,nextMatch,searchInfo);
- actionsGroup.append(bookmark,annotate,passage,cite,share);
+ actionsGroup.append(bookmark,annotate,passage,cite,share,speech,speechPause,speechStop,speechRate);
  toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,searchGroup,actionsGroup);
  toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Strumenti lettore PDF');
  sidebarToggle.textContent='☰';sidebarToggle.title='Pannello pagine';sidebarToggle.setAttribute('aria-label','Apri o chiudi il pannello laterale');
@@ -373,6 +379,84 @@ async function render(url,title,root,token){
    button.addEventListener('pointerdown',()=>{const selected=readSelection();if(selected){cachedSelection=selected;cachedPosition=capturePosition();}},{passive:true});
    button.addEventListener('touchstart',()=>{const selected=readSelection();if(selected){cachedSelection=selected;cachedPosition=capturePosition();}},{passive:true});
   });
+  // SpeechSynthesis uses the device's installed voices; no document text is sent by this plugin.
+  const synthesis=window.speechSynthesis;
+  let speechGeneration=0,speechActive=false,speechPaused=false;
+  let speechPage=1,speechChunks=[],speechIndex=0,speechAcrossPages=false;
+  const speechSupported=!!(synthesis&&window.SpeechSynthesisUtterance);
+  [speech,speechPause,speechStop,speechRate].forEach(control=>{control.disabled=!speechSupported;});
+  if(!speechSupported)speech.title='Sintesi vocale non disponibile in questo browser';
+  function updateSpeechUI(){
+   speech.textContent=speechActive?'Ricomincia lettura':'Ascolta';
+   speechPause.textContent=speechPaused?'Riprendi':'Pausa';
+   speechPause.disabled=!speechSupported||!speechActive;
+   speechStop.disabled=!speechSupported||!speechActive;
+  }
+  function stopReading(){
+   speechGeneration++;speechActive=false;speechPaused=false;speechChunks=[];speechIndex=0;
+   if(synthesis)try{synthesis.cancel();}catch(_error){}
+   updateSpeechUI();
+  }
+  stopSpeech=stopReading;
+  function chunksForSpeech(text){
+   const cleaned=text.replace(/\\s+/g,' ').trim();
+   const parts=cleaned.match(/[^.!?;:]+[.!?;:]?\\s*/g)||[cleaned];
+   const chunks=[];let buffer='';
+   for(const part of parts){
+    if((buffer+part).length>180&&buffer){chunks.push(buffer.trim());buffer='';}
+    if(part.length>180){for(let i=0;i<part.length;i+=180)chunks.push(part.slice(i,i+180).trim());}
+    else buffer+=part;
+   }
+   if(buffer.trim())chunks.push(buffer.trim());
+   return chunks.filter(Boolean);
+  }
+  async function loadSpeechPage(number,generation){
+   const pdfPage=await doc.getPage(number);
+   if(generation!==speechGeneration||token!==session)return;
+   const content=await pdfPage.getTextContent();
+   if(generation!==speechGeneration||token!==session)return;
+   speechChunks=chunksForSpeech(content.items.map(item=>item.str||'').join(' '));
+   speechIndex=0;
+  }
+  async function speakNext(generation){
+   if(generation!==speechGeneration||!speechActive||token!==session)return;
+   if(speechIndex>=speechChunks.length){
+    if(!speechAcrossPages||speechPage>=doc.numPages){stopReading();return;}
+    speechPage++;
+    try{await loadSpeechPage(speechPage,generation);}catch(error){console.warn('IRES PDF speech',error);stopReading();return;}
+    if(generation!==speechGeneration)return;
+    page=speechPage;navigate();
+    if(!speechChunks.length){speakNext(generation);return;}
+   }
+   const utterance=new SpeechSynthesisUtterance(speechChunks[speechIndex++]);
+   utterance.rate=Number(speechRate.value)||1;
+   utterance.lang=document.documentElement.lang||navigator.language||'it-IT';
+   utterance.onend=()=>{if(generation===speechGeneration)speakNext(generation);};
+   utterance.onerror=event=>{if(generation!==speechGeneration)return;if(event.error==='canceled'||event.error==='interrupted')return;console.warn('IRES PDF speech',event.error);stopReading();};
+   if(generation===speechGeneration&&speechActive)synthesis.speak(utterance);
+  }
+  speech.onclick=async()=>{
+   if(!speechSupported)return;
+   const selected=readSelection()||cachedSelection;
+   stopReading();
+   const generation=speechGeneration;
+   speechActive=true;speechAcrossPages=!selected;speechPage=page;updateSpeechUI();
+   try{
+    if(selected)speechChunks=chunksForSpeech(selected);
+    else await loadSpeechPage(speechPage,generation);
+    if(generation!==speechGeneration)return;
+    if(!speechChunks.length){window.alert('Questa pagina non contiene testo leggibile.');stopReading();return;}
+    speakNext(generation);
+   }catch(error){console.warn('IRES PDF speech',error);stopReading();window.alert('Impossibile avviare la lettura vocale.');}
+  };
+  speechPause.onclick=()=>{
+   if(!speechActive||!speechSupported)return;
+   if(speechPaused){synthesis.resume();speechPaused=false;}
+   else{synthesis.pause();speechPaused=true;}
+   updateSpeechUI();
+  };
+  speechStop.onclick=stopReading;
+  updateSpeechUI();
   function pageUrl(text){
    const link=new URL(config.dedicatedUrl||location.origin+'/');
    link.searchParams.set('ires_pdf_reader','1');
