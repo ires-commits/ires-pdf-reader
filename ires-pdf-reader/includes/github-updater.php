@@ -45,14 +45,26 @@ final class IRES_PDF_GitHub_Updater {
    wp_safe_redirect(add_query_arg('ires_pdf_upgrade','current',$return));exit;
   }
   require_once ABSPATH.'wp-admin/includes/class-wp-upgrader.php';
+  require_once ABSPATH.'wp-admin/includes/plugin.php';
+  $was_active=is_plugin_active($plugin);
+  $was_network_active=is_multisite() && is_plugin_active_for_network($plugin);
   $skin=new Automatic_Upgrader_Skin();
   $upgrader=new Plugin_Upgrader($skin);
   $result=$upgrader->upgrade($plugin);
   wp_clean_plugins_cache(true);
   $new=is_file(WP_PLUGIN_DIR.'/'.$plugin)?get_plugin_data(WP_PLUGIN_DIR.'/'.$plugin,false,false):[];
   $ok=!is_wp_error($result) && $result!==false && !empty($new['Version']) && version_compare($new['Version'],$old,'>') && version_compare($new['Version'],$release['version'],'>=');
+  $activation_ok=true;
+  if ($ok && ($was_active || $was_network_active)) {
+   $still_active=$was_network_active ? is_plugin_active_for_network($plugin) : is_plugin_active($plugin);
+   if (!$still_active) {
+    $activation=activate_plugin($plugin,'',$was_network_active,false);
+    $activation_ok=!is_wp_error($activation) && ($was_network_active ? is_plugin_active_for_network($plugin) : is_plugin_active($plugin));
+   }
+  }
   delete_transient('ires_pdf_reader_upgrade_lock');
-  wp_safe_redirect(add_query_arg('ires_pdf_upgrade',$ok?'success':'failed',$return));exit;
+  $state=!$ok?'failed':(!$activation_ok?'activation_failed':'success');
+  wp_safe_redirect(add_query_arg('ires_pdf_upgrade',$state,$return));exit;
  }
  static function diagnostics() {
   $release=self::release();
