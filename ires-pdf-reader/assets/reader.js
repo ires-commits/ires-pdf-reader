@@ -217,6 +217,7 @@ async function render(url,title,root,token){
      const text=textContent.items.map(item=>item.str||'').join(' ').toLocaleLowerCase();
      if(text.includes(query)){
       searchTerm=search.value.trim();
+      root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);
       page=n;navigate();searchInfo.textContent='Trovato a pagina '+n;return;
      }
     }
