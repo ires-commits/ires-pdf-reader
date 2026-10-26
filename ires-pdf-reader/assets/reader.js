@@ -495,6 +495,7 @@ async function render(url,title,root,token,citation=''){
      // Translate PDF text fragments individually for accurate positioning.
      // Large pages use chunked translation above; overlay is optional and may require manual inspection.
      overlayBlocks=[];
+     if(items.length>28){translationStatus.textContent='Traduzione completata. La sovrapposizione richiede una pagina con massimo 28 frammenti di testo; usa il pannello per questa pagina.';return;}
      for(let i=0;i<items.length;i++){
       if(generation!==translationGeneration||token!==session)return;
       if(items[i].str.trim().length<2){overlayBlocks.push(items[i].str);continue;}
