@@ -147,3 +147,17 @@
  .ires-pdf-viewer{min-height:0}
  .ires-pdf-toolbar{flex-shrink:0}
 }
+
+/* v2.6.3: the tools flyout must not be a child of an overflow-scrolling toolbar.
+   Safari clips absolutely positioned descendants of overflow:auto containers. */
+.ires-pdf-controls-shell{position:relative;z-index:25;flex:0 0 auto;background:#f7f9fc}
+.ires-pdf-controls-shell>.ires-pdf-controls{width:100%;box-sizing:border-box}
+.ires-pdf-controls-shell>.ires-pdf-extra-tools{padding:4px 8px;border-bottom:1px solid #d6dde6;box-sizing:border-box}
+@media(max-width:720px){
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools{display:none}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open{display:flex;position:absolute;top:100%;left:0;right:0;width:100%;z-index:40;max-height:min(48dvh,420px);overflow-y:auto;-webkit-overflow-scrolling:touch;flex-wrap:wrap;align-items:flex-start;background:#f7f9fc;border-bottom:1px solid #c9d3de;box-shadow:0 8px 16px #0003;padding:10px}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open .ires-pdf-search-group,
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open .ires-pdf-actions-group{display:flex;flex:1 1 100%;flex-wrap:wrap;justify-content:flex-start;min-width:0}
+ .ires-pdf-controls-shell>.ires-pdf-controls{overflow-x:auto;overflow-y:hidden}
+ .ires-pdf-tools-toggle[aria-expanded=true]{background:#165b80;color:#fff}
+}
