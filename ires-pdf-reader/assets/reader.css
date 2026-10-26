@@ -122,3 +122,9 @@
  .ires-pdf-sidebar{width:min(85vw,330px);max-width:85vw;flex-basis:min(85vw,330px)}
  .ires-pdf-translation-panel{padding:10px}
 }
+
+
+/* Experimental translated text positioned over the original PDF text layer. */
+.ires-pdf-page-slot,.ires-pdf-single-page{position:relative}
+.ires-pdf-translation-overlay{position:absolute;z-index:9;display:block;box-sizing:border-box;padding:1px 2px;background:rgba(255,255,248,.97);color:#182d43;font:12px/1.2 Arial,sans-serif;overflow-wrap:anywhere;overflow:visible;pointer-events:none;box-shadow:0 0 0 1px rgba(200,210,220,.5)}
+.ires-pdf-translation-panel button[aria-pressed=true]{background:#165b80;color:#fff}
