@@ -43,13 +43,17 @@ async function render(url,title,root,token,citation=''){
  const speechStop=el('button','','Stop voce');speechStop.type='button';
  const speechRate=el('select','ires-pdf-speech-rate');speechRate.setAttribute('aria-label','Velocità lettura');
  [['0.75','0,75×'],['1','1×'],['1.25','1,25×'],['1.5','1,5×'],['2','2×']].forEach(([value,label])=>{const option=el('option','',label);option.value=value;speechRate.append(option);});speechRate.value='1';
+ const translate=el('button','','Traduci');translate.type='button';translate.title='Traduci la selezione o la pagina corrente';
  const passage=el('button','','Link passaggio');passage.type='button';passage.title='Copia un link alla pagina e al testo selezionato';
  navGroup.append(previous,current,total,next);
  zoomGroup.append(minus,zoomLabel,plus,fit);
  viewGroup.append(sidebarToggle,mode,fullscreen);
  searchGroup.append(search,find,prevMatch,nextMatch,searchInfo);
- actionsGroup.append(bookmark,annotate,passage,cite,share,speech,speechPause,speechStop,speechRate);
- toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,searchGroup,actionsGroup);
+ actionsGroup.append(bookmark,annotate,passage,cite,share,translate,speech,speechPause,speechStop,speechRate);
+ const toolsToggle=el('button','ires-pdf-tools-toggle','Strumenti');toolsToggle.type='button';toolsToggle.setAttribute('aria-expanded','false');toolsToggle.setAttribute('aria-controls','ires-pdf-extra-tools');
+ const extraTools=el('div','ires-pdf-extra-tools');extraTools.id='ires-pdf-extra-tools';extraTools.append(searchGroup,actionsGroup);
+ toolsToggle.onclick=()=>{const expanded=toolsToggle.getAttribute('aria-expanded')!=='true';toolsToggle.setAttribute('aria-expanded',String(expanded));extraTools.classList.toggle('is-open',expanded);};
+ toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,toolsToggle,extraTools);
  toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Strumenti lettore PDF');
  sidebarToggle.textContent='☰';sidebarToggle.title='Pannello pagine';sidebarToggle.setAttribute('aria-label','Apri o chiudi il pannello laterale');
  mode.textContent='Continuo';mode.title='Passa allo scorrimento continuo';
@@ -69,15 +73,27 @@ async function render(url,title,root,token,citation=''){
  const bookmarksList=el('div','ires-pdf-bookmarks-list');bookmarksList.hidden=true;
  const notesTab=el('button','','Note');notesTab.type='button';
  const notesList=el('div','ires-pdf-notes-list');notesList.hidden=true;
- tabs.append(thumbsTab,outlineTab,resultsTab,bookmarksTab,notesTab);sidebar.append(tabs,thumbList,outlineList,resultsList,bookmarksList,notesList);
+ const translationTab=el('button','','Traduzione');translationTab.type='button';
+ const translationPanel=el('div','ires-pdf-translation-panel');translationPanel.hidden=true;
+ const language=el('select','ires-pdf-translation-language');language.setAttribute('aria-label','Lingua della traduzione');
+ [['it','Italiano'],['en','English'],['fr','Français'],['de','Deutsch'],['es','Español'],['pt','Português']].forEach(([code,name])=>{const option=el('option','',name);option.value=code;language.append(option);});language.value='en';
+ const translationStatus=el('p','ires-pdf-translation-status','Seleziona un passaggio nel PDF, oppure traduci la pagina corrente.');translationStatus.setAttribute('role','status');
+ const translationSource=el('div','ires-pdf-translation-source');const translationResult=el('div','ires-pdf-translation-result');
+ const translateAgain=el('button','','Traduci');translateAgain.type='button';
+ const translationSpeak=el('button','','Ascolta traduzione');translationSpeak.type='button';
+ const translationClose=el('button','','Chiudi');translationClose.type='button';
+ translationPanel.append(language,translateAgain,translationSpeak,translationClose,translationStatus,translationSource,translationResult);
+ tabs.append(thumbsTab,outlineTab,resultsTab,bookmarksTab,notesTab,translationTab);sidebar.append(tabs,thumbList,outlineList,resultsList,bookmarksList,notesList,translationPanel);
  const viewport=el('div','ires-pdf-pages');const singlePage=el('div','ires-pdf-single-page');const canvas=el('canvas');const singleText=el('div','ires-pdf-text-layer');singlePage.append(canvas,singleText);viewport.append(singlePage);
  workspace.append(sidebar,viewport);content.append(toolbar,workspace);
  sidebarToggle.onclick=()=>{sidebar.hidden=!sidebar.hidden;sidebarToggle.setAttribute('aria-expanded',String(!sidebar.hidden));if(!sidebar.hidden&&typeof loadThumbnails==='function'&&thumbCount===0)loadThumbnails();};
- thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=true;};
- outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;resultsList.hidden=true;bookmarksList.hidden=true;};
- resultsTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=false;bookmarksList.hidden=true;};
- bookmarksTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=false;notesList.hidden=true;};
- notesTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=false;};
+ thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=true;translationPanel.hidden=true;};
+ outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;resultsList.hidden=true;bookmarksList.hidden=true;translationPanel.hidden=true;};
+ resultsTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=false;bookmarksList.hidden=true;translationPanel.hidden=true;};
+ bookmarksTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=false;notesList.hidden=true;translationPanel.hidden=true;};
+ notesTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=false;translationPanel.hidden=true;};
+ translationTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=true;translationPanel.hidden=false;sidebar.hidden=false;sidebarToggle.setAttribute('aria-expanded','true');};
+ translationClose.onclick=()=>{sidebar.hidden=true;sidebarToggle.setAttribute('aria-expanded','false');};
  try{
   if(!config.pdfjsUrl||!config.workerUrl)throw Error('Libreria PDF.js non configurata');
   const pdfjs=window.pdfjsLib;
@@ -379,6 +395,55 @@ async function render(url,title,root,token,citation=''){
    button.addEventListener('pointerdown',()=>{const selected=readSelection();if(selected){cachedSelection=selected;cachedPosition=capturePosition();}},{passive:true});
    button.addEventListener('touchstart',()=>{const selected=readSelection();if(selected){cachedSelection=selected;cachedPosition=capturePosition();}},{passive:true});
   });
+  // Translation is initiated only by a reader action; no background text transmission.
+  let translatedText='',translationGeneration=0;
+  async function translateText(text,target){
+   if(window.Translator&&typeof window.Translator.create==='function'){
+    try{
+     const translator=await window.Translator.create({sourceLanguage:'auto',targetLanguage:target});
+     try{return await translator.translate(text);}finally{if(translator.destroy)translator.destroy();}
+    }catch(error){console.info('Traduzione locale non disponibile',error);}
+   }
+   if(!config.translationRemote||!config.translationApi)throw Error('Nessun motore di traduzione disponibile. Configura un endpoint HTTPS nelle impostazioni di IRES PDF Reader.');
+   const response=await fetch(config.translationApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:'auto',target})});
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(data.message||'Servizio di traduzione non disponibile');
+   if(typeof data.translatedText!=='string')throw Error('Risposta del servizio non valida');
+   return data.translatedText;
+  }
+  async function runTranslation(){
+   const generation=++translationGeneration;
+   const target=language.value;
+   const selected=(readSelection()||cachedSelection||'').trim();
+   let original=selected;
+   translationTab.click();
+   translationResult.textContent='';translatedText='';
+   translationStatus.textContent='Preparazione del testo…';translateAgain.disabled=true;
+   try{
+    if(!original){
+     const pdfPage=await doc.getPage(page);
+     const textContent=await pdfPage.getTextContent();
+     original=textContent.items.map(item=>item.str||'').join(' ').trim();
+    }
+    if(!original)throw Error('La pagina non contiene testo selezionabile. Potrebbe essere necessaria una versione OCR del PDF.');
+    // Limit request size for the configured REST translation service.
+    if(new TextEncoder().encode(original).length>9500)throw Error('Testo troppo lungo: seleziona un passaggio più breve (massimo 9,5 KB).');
+    translationSource.textContent=original;
+    translationStatus.textContent='Traduzione in corso…';
+    const translated=await translateText(original,target);
+    if(generation!==translationGeneration||token!==session)return;
+    translatedText=translated;translationResult.textContent=translated;
+    translationStatus.textContent='Traduzione completata · '+(selected?'testo selezionato':'pagina '+page);
+   }catch(error){if(generation===translationGeneration)translationStatus.textContent=error.message||'Traduzione non disponibile';}
+   finally{if(generation===translationGeneration)translateAgain.disabled=false;}
+  }
+  translate.onclick=runTranslation;translateAgain.onclick=runTranslation;
+  language.onchange=()=>{translatedText='';translationResult.textContent='';translationStatus.textContent='Lingua modificata: premi Traduci per aggiornare.';};
+  translationSpeak.onclick=()=>{
+   if(!translatedText||!window.speechSynthesis||!window.SpeechSynthesisUtterance){translationStatus.textContent='Nessuna traduzione da leggere o voce non disponibile';return;}
+   stopReading();
+   const utterance=new SpeechSynthesisUtterance(translatedText);utterance.lang=language.value;window.speechSynthesis.speak(utterance);
+  };
   // SpeechSynthesis uses the device's installed voices; no document text is sent by this plugin.
   const synthesis=window.speechSynthesis;
   let speechGeneration=0,speechActive=false,speechPaused=false;
