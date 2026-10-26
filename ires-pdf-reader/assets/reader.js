@@ -62,6 +62,7 @@ async function render(url,title,root,token,citation=''){
  search.placeholder='Cerca nel PDF';find.textContent='Trova';
 
  const workspace=el('div','ires-pdf-workspace');
+ const sidebarBackdrop=el('button','ires-pdf-sidebar-backdrop');sidebarBackdrop.type='button';sidebarBackdrop.setAttribute('aria-label','Chiudi pannello laterale');sidebarBackdrop.hidden=true;
  const sidebar=el('aside','ires-pdf-sidebar');sidebar.setAttribute('aria-label','Navigazione documento');sidebar.hidden=true;
  const tabs=el('div','ires-pdf-side-tabs');
  const thumbsTab=el('button','','Miniature');thumbsTab.type='button';
@@ -86,15 +87,23 @@ async function render(url,title,root,token,citation=''){
  translationPanel.append(language,translateAgain,overlayToggle,translationSpeak,translationClose,translationStatus,translationSource,translationResult);
  tabs.append(thumbsTab,outlineTab,resultsTab,bookmarksTab,notesTab,translationTab);sidebar.append(tabs,thumbList,outlineList,resultsList,bookmarksList,notesList,translationPanel);
  const viewport=el('div','ires-pdf-pages');const singlePage=el('div','ires-pdf-single-page');const canvas=el('canvas');const singleText=el('div','ires-pdf-text-layer');singlePage.append(canvas,singleText);viewport.append(singlePage);
- workspace.append(sidebar,viewport);content.append(toolbar,workspace);
- sidebarToggle.onclick=()=>{sidebar.hidden=!sidebar.hidden;sidebarToggle.setAttribute('aria-expanded',String(!sidebar.hidden));if(!sidebar.hidden&&typeof loadThumbnails==='function'&&thumbCount===0)loadThumbnails();};
+ workspace.append(sidebarBackdrop,sidebar,viewport);content.append(toolbar,workspace);
+ const isNarrow=()=>window.matchMedia('(max-width:720px)').matches;
+ function setSidebar(open){
+  sidebar.hidden=!open;sidebarBackdrop.hidden=!open||!isNarrow();
+  workspace.classList.toggle('ires-pdf-sidebar-open',open);
+  sidebarToggle.setAttribute('aria-expanded',String(open));
+ }
+ sidebarBackdrop.onclick=()=>setSidebar(false);
+ window.addEventListener('resize',()=>{sidebarBackdrop.hidden=sidebar.hidden||!isNarrow();},{passive:true});
+ sidebarToggle.onclick=()=>{setSidebar(sidebar.hidden);if(!sidebar.hidden&&typeof loadThumbnails==='function'&&thumbCount===0)loadThumbnails();};
  thumbsTab.onclick=()=>{thumbList.hidden=false;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=true;translationPanel.hidden=true;};
  outlineTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=false;resultsList.hidden=true;bookmarksList.hidden=true;translationPanel.hidden=true;};
  resultsTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=false;bookmarksList.hidden=true;translationPanel.hidden=true;};
  bookmarksTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=false;notesList.hidden=true;translationPanel.hidden=true;};
  notesTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=false;translationPanel.hidden=true;};
- translationTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=true;translationPanel.hidden=false;sidebar.hidden=false;sidebarToggle.setAttribute('aria-expanded','true');};
- translationClose.onclick=()=>{sidebar.hidden=true;sidebarToggle.setAttribute('aria-expanded','false');};
+ translationTab.onclick=()=>{thumbList.hidden=true;outlineList.hidden=true;resultsList.hidden=true;bookmarksList.hidden=true;notesList.hidden=true;translationPanel.hidden=false;setSidebar(true);};
+ translationClose.onclick=()=>setSidebar(false);
  try{
   if(!config.pdfjsUrl||!config.workerUrl)throw Error('Libreria PDF.js non configurata');
   const pdfjs=window.pdfjsLib;
