@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 2.5.1
+ * Version: 2.5.2
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -14,7 +14,7 @@ require_once __DIR__.'/includes/passage-store.php';
 require_once __DIR__.'/includes/translation.php';
 register_activation_hook(__FILE__,['IRES_PDF_Passage_Store','install']);
 final class IRES_PDF_Reader {
- const VERSION='2.5.1';
+ const VERSION='2.5.2';
  static function init() {
   add_action('init',function(){if(get_option('ires_pdf_passage_schema')!=='1')IRES_PDF_Passage_Store::install();});
   add_action('rest_api_init',['IRES_PDF_Passage_Store','routes']);
