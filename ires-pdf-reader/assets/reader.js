@@ -541,23 +541,36 @@ async function render(url,title,root,token,citation=''){
      overlayPage=targetPage;
      const pdfPage=await doc.getPage(targetPage);
      const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
-     // Each translated block is associated with its original PDF coordinates.
-     // Avoid excessive external requests on dense pages.
-     if(layout.length>18){
-      translationStatus.textContent='Pagina '+targetPage+' tradotta nel pannello. Sovrapposizione non disponibile: troppi blocchi ('+layout.length+').';
-     }else{
-      const translatedBlocks=[];
-      for(let i=0;i<layout.length;i++){
-       if(generation!==translationGeneration||token!==session)return;
-       translationStatus.textContent='Preparazione sovrapposizione: blocco '+(i+1)+' / '+layout.length;
-       const translated=await translateLong(layout[i].original,target,generation);
-       translatedBlocks.push({...layout[i],translation:translated});
-      }
+     const translatedBlocks=[];
+     // Translate paragraphs in small batches, preserving boundaries and coordinates.
+     // Unlike the old 18-block limit, dense pages are processed progressively.
+     const batchSize=6;
+     for(let start=0;start<layout.length;start+=batchSize){
       if(generation!==translationGeneration||token!==session)return;
-      overlayBlocks=translatedBlocks;
+      const batch=layout.slice(start,start+batchSize);
+      translationStatus.textContent='Sovrapposizione: paragrafi '+(start+1)+'–'+Math.min(start+batch.length,layout.length)+' di '+layout.length;
+      // Each paragraph has an independent result, so translation engines cannot
+      // accidentally merge or reorder paragraphs across a batch.
+      for(const block of batch){
+       if(generation!==translationGeneration||token!==session)return;
+       try{
+        const translation=await translateLong(block.original,target,generation);
+        translatedBlocks.push({...block,translation});
+       }catch(error){
+        if(generation!==translationGeneration||token!==session)return;
+        translationStatus.textContent='Traduzione parziale: '+translatedBlocks.length+' paragrafi pronti. '+(error.message||'Servizio non disponibile');
+        break;
+       }
+      }
+      overlayBlocks=translatedBlocks.slice();
       overlayToggle.disabled=!overlayBlocks.length;
-      translationStatus.textContent='Pagina '+targetPage+' tradotta. Puoi scegliere Mostra sul PDF.';
+      if(overlayEnabled)showOverlays();
+      if(translatedBlocks.length<start+batch.length)break;
      }
+     if(generation!==translationGeneration||token!==session)return;
+     translationStatus.textContent=translatedBlocks.length===layout.length?
+      'Pagina '+targetPage+' pronta: '+layout.length+' paragrafi sovrapponibili.':
+      'Sovrapposizione parziale: '+translatedBlocks.length+' di '+layout.length+' paragrafi. Puoi riprovare quando il motore torna disponibile.';
     }
    }catch(error){if(generation===translationGeneration)translationStatus.textContent=error.message||'Traduzione non disponibile';}
    finally{if(generation===translationGeneration)translateAgain.disabled=false;}
