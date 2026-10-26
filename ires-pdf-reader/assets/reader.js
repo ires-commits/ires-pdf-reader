@@ -483,8 +483,13 @@ async function render(url,title,root,token,citation=''){
   async function runTranslation(){
    const generation=++translationGeneration,target=language.value;
    // A previous selection must never override the currently displayed page.
-   const selected=readSelection().trim();
-   const targetPage=continuous?visiblePageForTranslation():page;let original=selected;
+   const targetPage=continuous?visiblePageForTranslation():page;
+   const selection=window.getSelection();
+   const selectedText=readSelection().trim();
+   const selectedNode=selection&&selection.anchorNode;
+   const selectedHolder=selectedNode&&(selectedNode.nodeType===1?selectedNode:selectedNode.parentElement).closest('.ires-pdf-page-slot, .ires-pdf-single-page');
+   const selected=selectedHolder&&(!continuous||Number(selectedHolder.dataset.page)===targetPage)?selectedText:'';
+   let original=selected;
    translationTab.click();translationSource.textContent='';translationResult.textContent='';translatedText='';
    translationStatus.textContent='Preparazione del testo…';translateAgain.disabled=true;
    overlayBlocks=[];overlayPage=0;clearOverlays();overlayEnabled=false;
