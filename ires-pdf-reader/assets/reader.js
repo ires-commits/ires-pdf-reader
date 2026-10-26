@@ -52,8 +52,12 @@ async function render(url,title,root,token,citation=''){
  actionsGroup.append(bookmark,annotate,passage,cite,share,translate,speech,speechPause,speechStop,speechRate);
  const toolsToggle=el('button','ires-pdf-tools-toggle','Strumenti');toolsToggle.type='button';toolsToggle.setAttribute('aria-expanded','false');toolsToggle.setAttribute('aria-controls','ires-pdf-extra-tools');
  const extraTools=el('div','ires-pdf-extra-tools');extraTools.id='ires-pdf-extra-tools';extraTools.append(searchGroup,actionsGroup);
- toolsToggle.onclick=()=>{const expanded=toolsToggle.getAttribute('aria-expanded')!=='true';toolsToggle.setAttribute('aria-expanded',String(expanded));extraTools.classList.toggle('is-open',expanded);};
- toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,toolsToggle,extraTools);
+ toolsToggle.onclick=()=>{
+  const expanded=toolsToggle.getAttribute('aria-expanded')!=='true';
+  toolsToggle.setAttribute('aria-expanded',String(expanded));
+  extraTools.classList.toggle('is-open',expanded);
+ };
+ toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,toolsToggle);
  toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Strumenti lettore PDF');
  sidebarToggle.textContent='☰';sidebarToggle.title='Pannello pagine';sidebarToggle.setAttribute('aria-label','Apri o chiudi il pannello laterale');
  mode.textContent='Continuo';mode.title='Passa allo scorrimento continuo';
@@ -87,7 +91,10 @@ async function render(url,title,root,token,citation=''){
  translationPanel.append(language,translateAgain,overlayToggle,translationSpeak,translationClose,translationStatus,translationSource,translationResult);
  tabs.append(thumbsTab,outlineTab,resultsTab,bookmarksTab,notesTab,translationTab);sidebar.append(tabs,thumbList,outlineList,resultsList,bookmarksList,notesList,translationPanel);
  const viewport=el('div','ires-pdf-pages');const singlePage=el('div','ires-pdf-single-page');const canvas=el('canvas');const singleText=el('div','ires-pdf-text-layer');singlePage.append(canvas,singleText);viewport.append(singlePage);
- workspace.append(sidebarBackdrop,sidebar,viewport);content.append(toolbar,workspace);
+ workspace.append(sidebarBackdrop,sidebar,viewport);
+ const controlsShell=el('div','ires-pdf-controls-shell');
+ controlsShell.append(toolbar,extraTools);
+ content.append(controlsShell,workspace);
  const isNarrow=()=>window.matchMedia('(max-width:720px)').matches;
  function setSidebar(open){
   sidebar.hidden=!open;sidebarBackdrop.hidden=!open||!isNarrow();
