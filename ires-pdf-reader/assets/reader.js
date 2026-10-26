@@ -463,19 +463,32 @@ async function render(url,title,root,token,citation=''){
     holder.append(translated);
    }
   }
+  overlayToggle.disabled=true;overlayToggle.title='Sovrapposizione in revisione: evita testi fuori posizione';
   overlayToggle.onclick=()=>{
    overlayEnabled=!overlayEnabled;overlayToggle.setAttribute('aria-pressed',String(overlayEnabled));
    overlayToggle.textContent=overlayEnabled?'Mostra originale':'Mostra sul PDF';
    showOverlays();
   };
+  function visiblePageForTranslation(){
+   const center=viewport.getBoundingClientRect().top+viewport.clientHeight/2;
+   let closest=page,distance=Infinity;
+   for(let i=0;i<slots.length;i++){
+    const rect=slots[i].getBoundingClientRect();
+    if(rect.bottom<=viewport.getBoundingClientRect().top||rect.top>=viewport.getBoundingClientRect().bottom)continue;
+    const delta=Math.abs((rect.top+rect.bottom)/2-center);
+    if(delta<distance){distance=delta;closest=i+1;}
+   }
+   return closest;
+  }
   async function runTranslation(){
    const generation=++translationGeneration,target=language.value;
-   const selected=(readSelection()||cachedSelection||'').trim();
-   const targetPage=page;let original=selected;
-   translationTab.click();translationResult.textContent='';translatedText='';
+   // A previous selection must never override the currently displayed page.
+   const selected=readSelection().trim();
+   const targetPage=continuous?visiblePageForTranslation():page;let original=selected;
+   translationTab.click();translationSource.textContent='';translationResult.textContent='';translatedText='';
    translationStatus.textContent='Preparazione del testo…';translateAgain.disabled=true;
    overlayBlocks=[];overlayPage=0;clearOverlays();overlayEnabled=false;
-   overlayToggle.textContent='Mostra sul PDF';overlayToggle.setAttribute('aria-pressed','false');overlayToggle.disabled=!!selected;
+   overlayToggle.textContent='Mostra sul PDF';overlayToggle.setAttribute('aria-pressed','false');overlayToggle.disabled=true;
    try{
     let items=[];
     if(!original){
@@ -492,17 +505,9 @@ async function render(url,title,root,token,citation=''){
     translationStatus.textContent='Traduzione completata · '+(selected?'testo selezionato':'pagina '+targetPage);
     if(!selected){
      overlayPage=targetPage;
-     // Translate PDF text fragments individually for accurate positioning.
-     // Large pages use chunked translation above; overlay is optional and may require manual inspection.
-     overlayBlocks=[];
-     if(items.length>28){translationStatus.textContent='Traduzione completata. La sovrapposizione richiede una pagina con massimo 28 frammenti di testo; usa il pannello per questa pagina.';return;}
-     for(let i=0;i<items.length;i++){
-      if(generation!==translationGeneration||token!==session)return;
-      if(items[i].str.trim().length<2){overlayBlocks.push(items[i].str);continue;}
-      translationStatus.textContent='Preparazione sovrapposizione: '+(i+1)+' / '+items.length;
-      overlayBlocks.push(await translateText(items[i].str,target));
-     }
-     translationStatus.textContent='Traduzione pronta · puoi visualizzarla sul PDF';
+     // Pixel-perfect overlay requires matching PDF text coordinates and translated
+     // layout. Disable the old fragment-by-index implementation: it misplaces text.
+     translationStatus.textContent='Traduzione della pagina '+targetPage+' completata nel pannello. Sovrapposizione sul PDF temporaneamente disabilitata per evitare testi fuori posizione.';
     }
    }catch(error){if(generation===translationGeneration)translationStatus.textContent=error.message||'Traduzione non disponibile';}
    finally{if(generation===translationGeneration)translateAgain.disabled=false;}
