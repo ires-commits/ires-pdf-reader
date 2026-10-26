@@ -161,3 +161,22 @@
  .ires-pdf-controls-shell>.ires-pdf-controls{overflow-x:auto;overflow-y:hidden}
  .ires-pdf-tools-toggle[aria-expanded=true]{background:#165b80;color:#fff}
 }
+
+/* v2.6.4: restore desktop toolbar and use an in-flow mobile tools panel.
+   Avoid absolute-positioned menus, clipping and competing stacking contexts on iOS. */
+@media(min-width:721px){
+ .ires-pdf-controls-shell{display:flex;align-items:center;flex-wrap:wrap;position:relative;z-index:2}
+ .ires-pdf-controls-shell>.ires-pdf-controls{width:auto;flex:0 0 auto;border-bottom:0}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools{flex:1 1 auto;width:auto;min-width:0;border-bottom:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools .ires-pdf-search-group{flex:0 1 auto}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools .ires-pdf-actions-group{flex:1 1 auto;justify-content:flex-end}
+}
+@media(max-width:720px){
+ .ires-pdf-controls-shell{display:flex;flex-direction:column;position:relative;z-index:3;max-height:60dvh;overflow:visible}
+ .ires-pdf-controls-shell>.ires-pdf-controls{flex:0 0 auto;width:100%;overflow-x:auto;overflow-y:hidden}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools,
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open{position:static!important;top:auto;left:auto;right:auto;display:none;width:100%;max-height:none;overflow:visible;box-shadow:none;border-top:1px solid #d6dde6;background:#f7f9fc;padding:8px;box-sizing:border-box}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open{display:flex!important;flex:0 1 auto;max-height:40dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-wrap:wrap}
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open .ires-pdf-search-group,
+ .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open .ires-pdf-actions-group{display:flex!important;flex:1 1 100%;min-width:0;flex-wrap:wrap;justify-content:flex-start}
+}
