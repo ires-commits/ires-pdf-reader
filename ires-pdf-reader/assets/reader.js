@@ -450,20 +450,49 @@ async function render(url,title,root,token,citation=''){
    clearOverlays();if(!overlayEnabled||!overlayBlocks.length)return;
    const holder=continuous?slots[overlayPage-1]:singlePage;
    if(!holder||(!continuous&&page!==overlayPage))return;
-   const layer=holder.querySelector('.ires-pdf-text-layer');if(!layer)return;
-   const spans=[...layer.querySelectorAll('span')].filter(node=>node.textContent.trim()&&node.getBoundingClientRect().width);
-   // The PDF text layer supplies actual positioned fragments. Match them in reading order.
-   const max=Math.min(spans.length,overlayBlocks.length);
-   for(let i=0;i<max;i++){
-    const span=spans[i],block=overlayBlocks[i],box=span.getBoundingClientRect(),parent=holder.getBoundingClientRect();
-    const translated=el('span','ires-pdf-translation-overlay',block);
-    translated.style.left=(box.left-parent.left)+'px';translated.style.top=(box.top-parent.top)+'px';
-    translated.style.width=Math.max(30,box.width)+'px';translated.style.minHeight=Math.max(14,box.height)+'px';
-    translated.title=span.textContent;
-    holder.append(translated);
+   // Coordinates are derived from PDF.js viewport transforms, never span indices.
+   for(const block of overlayBlocks){
+    const node=el('div','ires-pdf-translation-overlay',block.translation);
+    node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
+    node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
+    node.style.fontSize=Math.max(7,Math.min(12,block.fontSize*scale))+'px';
+    node.title=block.original;holder.append(node);
    }
   }
-  overlayToggle.disabled=true;overlayToggle.title='Sovrapposizione in revisione: evita testi fuori posizione';
+  function extractLayoutBlocks(items,viewport){
+   const lines=[];
+   for(const item of items){
+    if(!item.str||!item.str.trim()||!Array.isArray(item.transform))continue;
+    const [x,baseline]=viewport.convertToViewportPoint(item.transform[4],item.transform[5]);
+    const font=Math.max(6,Math.abs(item.height||item.transform[3]||10));
+    const width=Math.max(3,(item.width||item.str.length*font*.45)*viewport.scale);
+    const h=font*viewport.scale*1.3;
+    const y=baseline-h*.82;
+    const line=lines.find(l=>Math.abs(l.y-y)<h*.55&&Math.abs(l.font-font)<font*.45);
+    const segment={text:item.str,x,y,width,h,font};
+    if(line)line.parts.push(segment);
+    else lines.push({y,font,parts:[segment]});
+   }
+   lines.sort((a,b)=>a.y-b.y);
+   const ordered=lines.map(line=>{
+    line.parts.sort((a,b)=>a.x-b.x);
+    const left=Math.min(...line.parts.map(p=>p.x));
+    const right=Math.max(...line.parts.map(p=>p.x+p.width));
+    return {x:left,y:Math.min(...line.parts.map(p=>p.y)),right,bottom:Math.max(...line.parts.map(p=>p.y+p.h)),font:line.font,text:line.parts.map(p=>p.text).join(' ').trim()};
+   }).filter(l=>l.text);
+   // Group adjacent lines into paragraphs; separate columns and distant headings.
+   const blocks=[];
+   for(const line of ordered){
+    const last=blocks[blocks.length-1];
+    const sameColumn=last&&Math.abs(line.x-last.x)<Math.max(24,last.font*3);
+    const nearby=last&&line.y-last.bottom<Math.max(12,last.font*1.7);
+    if(last&&sameColumn&&nearby&&last.text.length+line.text.length<1000){
+     last.text+=' '+line.text;last.right=Math.max(last.right,line.right);last.bottom=Math.max(last.bottom,line.bottom);
+    }else blocks.push({...line});
+   }
+   return blocks.map(b=>({x:b.x,y:b.y,width:b.right-b.x,height:b.bottom-b.y,fontSize:b.font,original:b.text}));
+  }
+  overlayToggle.disabled=true;overlayToggle.title='Disponibile dopo la traduzione della pagina';
   overlayToggle.onclick=()=>{
    overlayEnabled=!overlayEnabled;overlayToggle.setAttribute('aria-pressed',String(overlayEnabled));
    overlayToggle.textContent=overlayEnabled?'Mostra originale':'Mostra sul PDF';
@@ -510,9 +539,25 @@ async function render(url,title,root,token,citation=''){
     translationStatus.textContent='Traduzione completata · '+(selected?'testo selezionato':'pagina '+targetPage);
     if(!selected){
      overlayPage=targetPage;
-     // Pixel-perfect overlay requires matching PDF text coordinates and translated
-     // layout. Disable the old fragment-by-index implementation: it misplaces text.
-     translationStatus.textContent='Traduzione della pagina '+targetPage+' completata nel pannello. Sovrapposizione sul PDF temporaneamente disabilitata per evitare testi fuori posizione.';
+     const pdfPage=await doc.getPage(targetPage);
+     const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
+     // Each translated block is associated with its original PDF coordinates.
+     // Avoid excessive external requests on dense pages.
+     if(layout.length>18){
+      translationStatus.textContent='Pagina '+targetPage+' tradotta nel pannello. Sovrapposizione non disponibile: troppi blocchi ('+layout.length+').';
+     }else{
+      const translatedBlocks=[];
+      for(let i=0;i<layout.length;i++){
+       if(generation!==translationGeneration||token!==session)return;
+       translationStatus.textContent='Preparazione sovrapposizione: blocco '+(i+1)+' / '+layout.length;
+       const translated=await translateLong(layout[i].original,target,generation);
+       translatedBlocks.push({...layout[i],translation:translated});
+      }
+      if(generation!==translationGeneration||token!==session)return;
+      overlayBlocks=translatedBlocks;
+      overlayToggle.disabled=!overlayBlocks.length;
+      translationStatus.textContent='Pagina '+targetPage+' tradotta. Puoi scegliere Mostra sul PDF.';
+     }
     }
    }catch(error){if(generation===translationGeneration)translationStatus.textContent=error.message||'Traduzione non disponibile';}
    finally{if(generation===translationGeneration)translateAgain.disabled=false;}
