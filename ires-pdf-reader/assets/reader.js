@@ -627,7 +627,8 @@ async function render(url,title,root,token,citation=''){
   share.onclick=()=>copyValue(pageUrl(''),share);
   viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
   viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();previous.click();}});
-  await paint();
+  // Start in continuous-scroll mode; the toolbar still allows switching to single page.
+  mode.click();
   if(linkedText){searchInfo.textContent='Passaggio evidenziato · pagina '+page;}
  }catch(error){if(token!==session)return;fail(error);}
  function fail(error){
