@@ -11,8 +11,15 @@ final class IRES_PDF_Translation {
   ]);
  }
  static function translate($request){
-  $endpoint=trim((string)get_option('ires_pdf_translation_endpoint',''));
-  if(!$endpoint)return new WP_Error('ires_translation_disabled','Traduzione remota non configurata',['status'=>503]);
+  $provider=(string)get_option('ires_pdf_translation_provider','libretranslate');
+  $api_key=(string)get_option('ires_pdf_translation_api_key','');
+  if($provider==='deepl'){
+   $endpoint='https://api-free.deepl.com/v2/translate';
+   if(!$api_key)return new WP_Error('ires_translation_disabled','Inserisci la chiave API DeepL nelle impostazioni del lettore',['status'=>503]);
+  }else{
+   $endpoint=trim((string)get_option('ires_pdf_translation_endpoint',''));
+   if(!$endpoint)return new WP_Error('ires_translation_disabled','Configura un endpoint LibreTranslate HTTPS nelle impostazioni',['status'=>503]);
+  }
   $parts=wp_parse_url($endpoint);
   if(!$parts||($parts['scheme']??'')!=='https'||empty($parts['host'])||!wp_http_validate_url($endpoint))
    return new WP_Error('ires_translation_endpoint','Endpoint HTTPS non valido',['status'=>503]);
@@ -29,19 +36,28 @@ final class IRES_PDF_Translation {
   $count=(int)get_transient($key);
   if($count>=40)return new WP_Error('ires_translation_limit','Limite orario raggiunto',['status'=>429]);
   set_transient($key,$count+1,HOUR_IN_SECONDS);
-  $api_key=(string)get_option('ires_pdf_translation_api_key','');
-  $payload=['q'=>$text,'source'=>$source,'target'=>$target,'format'=>'text'];
-  if($api_key!=='')$payload['api_key']=$api_key;
+  if($provider==='deepl'){
+   $payload=['text'=>[$text],'target_lang'=>strtoupper($target)];
+   if($source!=='auto')$payload['source_lang']=strtoupper($source);
+   $headers=['Content-Type'=>'application/json','Authorization'=>'DeepL-Auth-Key '.$api_key];
+  }else{
+   $payload=['q'=>$text,'source'=>$source,'target'=>$target,'format'=>'text'];
+   if($api_key!=='')$payload['api_key']=$api_key;
+   $headers=['Content-Type'=>'application/json'];
+  }
   $response=wp_safe_remote_post($endpoint,[
-   'timeout'=>25,'redirection'=>0,'headers'=>['Content-Type'=>'application/json'],
+   'timeout'=>35,'redirection'=>0,'headers'=>$headers,
    'body'=>wp_json_encode($payload),'limit_response_size'=>200000
   ]);
   if(is_wp_error($response))return new WP_Error('ires_translation_unavailable','Servizio non raggiungibile',['status'=>502]);
-  if(wp_remote_retrieve_response_code($response)!==200)
-   return new WP_Error('ires_translation_failed','Il servizio non ha restituito una traduzione',['status'=>502]);
+  $http=wp_remote_retrieve_response_code($response);
+  if($http!==200){
+   $message=$http===429?'Limite richieste del servizio raggiunto':($http===403||$http===401?'Chiave API non valida o non autorizzata':'Servizio di traduzione non disponibile (HTTP '.$http.')');
+   return new WP_Error('ires_translation_failed',$message,['status'=>502]);
+  }
   $data=json_decode(wp_remote_retrieve_body($response),true);
-  if(!is_array($data)||!isset($data['translatedText'])||!is_string($data['translatedText']))
-   return new WP_Error('ires_translation_response','Risposta non valida',['status'=>502]);
-  return rest_ensure_response(['translatedText'=>$data['translatedText']]);
+  $translated=$provider==='deepl'?($data['translations'][0]['text']??null):($data['translatedText']??null);
+  if(!is_string($translated))return new WP_Error('ires_translation_response','Risposta non valida',['status'=>502]);
+  return rest_ensure_response(['translatedText'=>$translated]);
  }
 }
