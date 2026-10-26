@@ -400,7 +400,15 @@ async function render(url,title,root,token,citation=''){
   async function translateText(text,target){
    if(window.Translator&&typeof window.Translator.create==='function'){
     try{
-     const translator=await window.Translator.create({sourceLanguage:'auto',targetLanguage:target});
+     let sourceLanguage='it';
+     if(window.LanguageDetector&&typeof window.LanguageDetector.create==='function'){
+      const detector=await window.LanguageDetector.create();
+      const detected=await detector.detect(text);
+      if(detected&&detected[0]&&detected[0].detectedLanguage)sourceLanguage=detected[0].detectedLanguage;
+      if(detector.destroy)detector.destroy();
+     }
+     if(sourceLanguage===target)return text;
+     const translator=await window.Translator.create({sourceLanguage,targetLanguage:target});
      try{return await translator.translate(text);}finally{if(translator.destroy)translator.destroy();}
     }catch(error){console.info('Traduzione locale non disponibile',error);}
    }
