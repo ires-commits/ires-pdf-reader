@@ -132,3 +132,18 @@
 /* v2.6 coordinate-based paragraph overlay: bounded text inside original region. */
 .ires-pdf-translation-overlay{overflow:auto;overflow-wrap:anywhere;white-space:normal;line-height:1.15;padding:2px 3px;border-radius:2px;box-shadow:0 0 0 1px rgba(60,80,100,.22);background:rgba(255,255,248,.98);pointer-events:auto;scrollbar-width:thin}
 @media(max-width:720px){.ires-pdf-translation-overlay{padding:1px 2px;line-height:1.1}}
+
+/* iOS Safari: navigation/translation drawer floats over PDF, never shrinks the page. */
+.ires-pdf-sidebar-backdrop[hidden]{display:none!important}
+.ires-pdf-sidebar-backdrop{display:none}
+@media(max-width:720px){
+ .ires-pdf-workspace{position:relative;min-width:0;overflow:hidden}
+ .ires-pdf-workspace>.ires-pdf-pages{width:100%;min-width:0;flex:1 1 100%}
+ .ires-pdf-workspace>.ires-pdf-sidebar{position:absolute!important;left:0;top:0;bottom:0;z-index:32;display:block;box-sizing:border-box;width:min(86vw,360px)!important;max-width:min(86vw,360px)!important;min-width:0;flex:none!important;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:3px 0 14px #0002}
+ .ires-pdf-workspace>.ires-pdf-sidebar[hidden]{display:none!important}
+ .ires-pdf-sidebar-backdrop:not([hidden]){display:block;position:absolute;inset:0;z-index:31;border:0;border-radius:0;background:rgba(17,24,39,.3);cursor:pointer}
+ .ires-pdf-side-tabs{z-index:2}
+ .ires-pdf-overlay{height:100dvh;max-height:100dvh}
+ .ires-pdf-viewer{min-height:0}
+ .ires-pdf-toolbar{flex-shrink:0}
+}
