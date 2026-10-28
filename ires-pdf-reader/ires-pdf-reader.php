@@ -52,27 +52,7 @@ final class IRES_PDF_Reader {
   echo '<p><label>Endpoint HTTPS: <input class="regular-text" type="url" name="ires_pdf_translation_endpoint" value="'.esc_attr(get_option('ires_pdf_translation_endpoint','')).'" placeholder="https://servizio.example/translate"></label></p>';
   echo '<p><label>Chiave API (se richiesta): <input class="regular-text" type="password" autocomplete="new-password" name="ires_pdf_translation_api_key" value="'.esc_attr(get_option('ires_pdf_translation_api_key','')).'"></label></p>';
   submit_button();echo '</form>';
-  $diag=IRES_PDF_GitHub_Updater::diagnostics();
-  echo '<hr><h2>Diagnostica aggiornamenti GitHub</h2>';
-  echo '<p>Versione installata: <strong>'.esc_html(self::VERSION).'</strong></p>';
-  echo '<p>Ultima release GitHub: <strong>'.esc_html($diag['release']['version']??'Non disponibile').'</strong></p>';
-  echo '<p>Aggiornamento rilevato da WordPress: <strong>'.($diag['detected']?'Si':'No').'</strong></p>';
-  echo '<p>Ultimo controllo WordPress: '.($diag['checked']?esc_html(wp_date('d/m/Y H:i:s',$diag['checked'])):'Mai').'</p>';
-  if(current_user_can('update_plugins'))echo '<p><a class="button button-secondary" href="'.esc_url(wp_nonce_url(admin_url('admin-post.php?action=ires_pdf_check_updates'),'ires_pdf_check_updates')).'">Controlla aggiornamenti adesso</a></p>';
-  if(isset($_GET['ires_pdf_upgrade'])) {
-   $state=sanitize_key(wp_unslash($_GET['ires_pdf_upgrade']));
-   $messages=['success'=>'Aggiornamento completato.','failed'=>'Aggiornamento non riuscito: controlla i log del server e la pagina Plugin.','current'=>'Il plugin e gia aggiornato.','unavailable'=>'Impossibile leggere la release GitHub.','busy'=>'Un aggiornamento e gia in corso.','activation_failed'=>'File aggiornati, ma la riattivazione automatica non e riuscita: verifica la pagina Plugin.'];
-   if(isset($messages[$state]))echo '<div class="notice '.($state==='success'?'notice-success':'notice-warning').'"><p>'.esc_html($messages[$state]).'</p></div>';
-  }
-  $remote=$diag['release']['version']??'';
-  if(current_user_can('update_plugins')&&$remote&&version_compare($remote,self::VERSION,'>')) {
-   echo '<h2>Aggiorna IRES PDF Reader</h2><p>Nuova versione disponibile: <strong>'.esc_html($remote).'</strong>. Sara aggiornato soltanto questo plugin.</p>';
-   echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'">';
-   echo '<input type="hidden" name="action" value="ires_pdf_install_update">';
-   wp_nonce_field('ires_pdf_install_update');
-   submit_button('Aggiorna ora alla versione '.esc_html($remote),'primary','submit',false);
-   echo '</form>';
-  }
+  echo '<hr><h2>Aggiornamenti GitHub</h2>';
   ires_shared_updates_panel();
   echo '</div>';
  }
