@@ -209,3 +209,12 @@
  .ires-pdf-overlay .ires-pdf-controls button{min-height:36px}
  .ires-pdf-overlay .ires-pdf-extra-tools.is-open{background:#fff}
 }
+
+/* Translation offer and per-page progress, including localized status. */
+.ires-pdf-translation-offer[hidden]{display:none!important}
+.ires-pdf-translation-offer{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;padding:10px 16px;background:#e6f4f3;color:#125b62;border-bottom:1px solid #b8dedb;font-size:13px;font-weight:600}
+.ires-pdf-translation-offer button{padding:7px 13px;border-radius:9px;border:1px solid #87c5c3;background:#fff;color:#125b62;font-weight:650;cursor:pointer}
+.ires-pdf-translation-offer button:first-of-type{background:#087f8c;color:#fff;border-color:#087f8c}
+.ires-pdf-page-slot,.ires-pdf-single-page{position:relative}
+.ires-pdf-translation-loading{position:absolute;z-index:12;top:20px;left:50%;transform:translateX(-50%);pointer-events:none;max-width:calc(100% - 30px);padding:11px 16px;border-radius:999px;background:rgba(16,56,71,.93);color:#fff;font:600 13px/1.3 system-ui,-apple-system,sans-serif;white-space:nowrap;box-shadow:0 6px 18px #102f4240}
+@media(max-width:720px){.ires-pdf-translation-offer{padding:8px;gap:7px;font-size:12px}.ires-pdf-translation-loading{top:14px;font-size:11px;padding:8px 12px}}
