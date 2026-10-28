@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 2.12.4
+ * Version: 2.13.0
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -13,13 +13,17 @@ require_once __DIR__.'/includes/github-updater.php';
 require_once __DIR__.'/includes/shared-updates.php';
 require_once __DIR__.'/includes/passage-store.php';
 require_once __DIR__.'/includes/translation.php';
+require_once __DIR__.'/includes/translation-cache.php';
 register_activation_hook(__FILE__,['IRES_PDF_Passage_Store','install']);
+register_activation_hook(__FILE__,['IRES_PDF_Translation_Cache','install']);
 final class IRES_PDF_Reader {
- const VERSION='2.12.4';
+ const VERSION='2.13.0';
  static function init() {
   add_action('init',function(){if(get_option('ires_pdf_passage_schema')!=='1')IRES_PDF_Passage_Store::install();});
   add_action('rest_api_init',['IRES_PDF_Passage_Store','routes']);
   add_action('rest_api_init',['IRES_PDF_Translation','routes']);
+  add_action('rest_api_init',['IRES_PDF_Translation_Cache','routes']);
+  add_action('init',function(){if(get_option('ires_pdf_translation_cache_schema')!==IRES_PDF_Translation_Cache::SCHEMA)IRES_PDF_Translation_Cache::install();});
   add_action('template_redirect',['IRES_PDF_Passage_Store','redirect'],-1);
   add_shortcode('ires_pdf_reader',[__CLASS__,'shortcode']);
   add_action('wp_enqueue_scripts',[__CLASS__,'assets']);
@@ -73,7 +77,7 @@ final class IRES_PDF_Reader {
   wp_enqueue_style('ires-pdf-reader',plugins_url('assets/reader.css',__FILE__),[],self::VERSION);
   wp_enqueue_script('ires-pdf-reader-pdfjs',plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),[],self::VERSION,true);
   wp_enqueue_script('ires-pdf-reader',plugins_url('assets/reader.js',__FILE__),['ires-pdf-reader-pdfjs'],self::VERSION,true);
-  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/'),'passageApi'=>rest_url('ires-pdf-reader/v1/passages'),'translationApi'=>rest_url('ires-pdf-reader/v1/translate'),'translationWorkerUrl'=>plugins_url('assets/translation-worker.js',__FILE__),'translationRemote'=>(get_option('ires_pdf_translation_provider','libretranslate')==='deepl'?!!get_option('ires_pdf_translation_api_key',''):!!get_option('ires_pdf_translation_endpoint','')),'scientificIntegration'=>(bool)get_option('ires_pdf_reader_integration',true)]).';','before');
+  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/'),'passageApi'=>rest_url('ires-pdf-reader/v1/passages'),'translationApi'=>rest_url('ires-pdf-reader/v1/translate'),'translationCacheApi'=>rest_url('ires-pdf-reader/v1/translation-cache'),'translationCacheWrite'=>current_user_can('manage_options'),'translationCacheNonce'=>wp_create_nonce('wp_rest'),'translationWorkerUrl'=>plugins_url('assets/translation-worker.js',__FILE__),'translationRemote'=>(get_option('ires_pdf_translation_provider','libretranslate')==='deepl'?!!get_option('ires_pdf_translation_api_key',''):!!get_option('ires_pdf_translation_endpoint','')),'scientificIntegration'=>(bool)get_option('ires_pdf_reader_integration',true)]).';','before');
  }
  static function shortcode($atts) {
   $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF','citation'=>''],$atts,'ires_pdf_reader');
