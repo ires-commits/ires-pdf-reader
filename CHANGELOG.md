@@ -4,6 +4,13 @@
 
 # Changelog
 
+## 2.12.1
+- Watchdog di 45 secondi per ogni richiesta al motore neurale: un'elaborazione bloccata viene interrotta e il Web Worker ricreato, anziché lasciare la percentuale congelata indefinitamente.
+- Segmenti di traduzione ridotti a 1200 byte per limitare il carico di inferenza per richiesta.
+- Ripristinato l'aggiornamento del pannello di traduzione quando una pagina viene caricata dalla cache persistente.
+- Il progresso continua a misurare i blocchi completati: durante la prima inizializzazione del modello può rimanere fermo finché il blocco in corso non termina.
+
+
 ## 2.12.0
 - Indicatore "Translating" esclusivamente sulla pagina attiva, selezionata dal centro dell'area di lettura; nessun indicatore sulle altre pagine.
 - Avanzamento percentuale reale per blocchi tradotti nella pagina (0–100%), senza stime artificiali durante il caricamento iniziale del modello.
