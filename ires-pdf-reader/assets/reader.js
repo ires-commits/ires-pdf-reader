@@ -488,6 +488,25 @@ async function render(url,title,root,token,citation=''){
    });
   }
   const encoder=new TextEncoder();
+  async function sharedTranslation(key,entry){
+   if(!key||!config.translationCacheApi)return null;
+   try{
+    if(entry===undefined){
+     const response=await fetch(config.translationCacheApi+'?key='+encodeURIComponent(key),{credentials:'same-origin'});
+     if(!response.ok)return null;
+     const payload=await response.json();
+     return payload&&Array.isArray(payload.blocks)?payload:null;
+    }
+    // Anonymous visitors can read shared translations, but cannot poison the cache.
+    if(!config.translationCacheWrite)return null;
+    const response=await fetch(config.translationCacheApi,{
+     method:'POST',credentials:'same-origin',
+     headers:{'Content-Type':'application/json','X-WP-Nonce':config.translationCacheNonce||''},
+     body:JSON.stringify({key,entry})
+    });
+    return response.ok;
+   }catch(_){return null;}
+  }
   function splitTranslation(text,maxBytes=6500){
    const chunks=[];let remaining=text.trim();
    while(remaining){
