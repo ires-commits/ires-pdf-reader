@@ -530,7 +530,8 @@ async function render(url,title,root,token,citation=''){
    for(const {holder,number} of pages){
     const key=language.value+':'+number;
     if(translationCache.has(key))continue;
-    const loading=el('div','ires-pdf-translation-loading',translationFailures.has(key)?labels[language.value][27]:labels[language.value][2]+'…');
+    const failure=translationFailures.get(key);
+    const loading=el('div','ires-pdf-translation-loading',failure&&Date.now()<failure.until?labels[language.value][27]:labels[language.value][2]+'…');
     loading.setAttribute('role','status');holder.append(loading);
    }
   }
@@ -577,7 +578,8 @@ async function render(url,title,root,token,citation=''){
     return rect.bottom>v.top&&rect.top<v.bottom;
    }).map(({n})=>n):[number];
    for(const n of [number,...visibleNumbers]){
-    if(!translationCache.has(language.value+':'+n)&&!translationFailures.has(language.value+':'+n))translationPending.add(n);
+    const key=language.value+':'+n,failed=translationFailures.get(key);
+    if(!translationCache.has(key)&&(!failed||Date.now()>=failed.until))translationPending.add(n);
    }
    showTranslationLoading();
    if(!translationWorker)processTranslationQueue();
@@ -617,8 +619,14 @@ async function render(url,title,root,token,citation=''){
       showOverlays();
      }catch(error){
       if(generation===translationGeneration)translationStatus.textContent='Pagina '+number+': '+(error.message||'traduzione non disponibile');
-      translationFailures.set(key,Date.now());showTranslationLoading();
-      // Failed pages are retried explicitly, not in a tight loop.
+      const previous=translationFailures.get(key);
+      const attempts=(previous?previous.attempts:0)+1;
+      const message=String(error.message||'');
+      const permanent=/configura|chiave API|autorizzata|non valido|invalid|403|401/i.test(message);
+      const delay=permanent?300000:Math.min(120000,Math.pow(2,Math.min(attempts,5))*2500);
+      translationFailures.set(key,{attempts,until:Date.now()+delay,message});
+      showTranslationLoading();
+      // Temporary errors are eligible for retry on the next viewport update.
      }
     }
    }finally{
