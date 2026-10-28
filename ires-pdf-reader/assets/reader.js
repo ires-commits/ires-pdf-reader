@@ -504,7 +504,7 @@ async function render(url,title,root,token,citation=''){
   // The model is downloaded once per language pair and cached by the browser.
   const localModels={'it-en':true,'en-it':true};
   let localWorker=null,localRequestId=0;
-  const LOCAL_TRANSLATION_TIMEOUT=45000;
+  const LOCAL_TRANSLATION_TIMEOUT=25000;
   function resetLocalWorker(reason){
    if(localWorker){localWorker.terminate();localWorker=null;}
    for(const pending of localRequests.values()){clearTimeout(pending.timer);pending.reject(Error(reason));}
@@ -561,7 +561,7 @@ async function render(url,title,root,token,citation=''){
    return data.translatedText;
   }
   async function translateLong(text,target,generation){
-   const chunks=splitTranslation(text,1200),output=[];
+   const chunks=splitTranslation(text,450),output=[];
    for(const chunk of chunks){
     if(generation!==translationGeneration||token!==session||!translationMode)throw Error('Traduzione interrotta');
     output.push(await translateText(chunk,target));
