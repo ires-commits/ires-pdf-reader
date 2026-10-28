@@ -770,7 +770,7 @@ async function render(url,title,root,token,citation=''){
       const items=content.items.filter(item=>item.str&&item.str.trim());
       const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
       const original=items.map(item=>item.str).join(' ');
-      const storageKey=await translationStorageKey(number,target,original);
+      const storageKey=await translationStorageKey(number,target,'layout-v2:'+original);
       const previous=await storedTranslation(storageKey)||await sharedTranslation(storageKey);
       if(previous&&storageKey)storedTranslation(storageKey,previous).catch(()=>{});
       if(previous&&Array.isArray(previous.blocks)&&previous.blocks.length===layout.length){
