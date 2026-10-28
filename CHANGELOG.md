@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.10.3
+- Retry automatico con attesa progressiva per le pagine la cui traduzione fallisce temporaneamente.
+- Cache lato server per ridurre richieste ripetute al provider e l'incidenza dei limiti orari.
+- Gli errori di traduzione non bloccano più definitivamente una pagina durante la sessione.
+
+
+
 ## 2.10.0
 - Traduzione automatica per tutte le pagine visibili, con indicatori localizzati per pagina durante l'elaborazione.
 - Invito alla traduzione per browser in inglese, francese, tedesco, spagnolo e portoghese; nessuna trasmissione automatica del testo prima del consenso.
