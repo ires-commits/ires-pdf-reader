@@ -43,8 +43,13 @@ function ires_shared_updates_panel() {
         if($has) $available++;
         echo '<tr><td><strong>'.esc_html($item['name']).'</strong></td><td>'.esc_html($item['installed']??'Non installato').'</td><td>'.esc_html($latest??'Non disponibile').'</td><td>';
         if($has) {
-            $url=$id==='ps' ? admin_url('edit.php?post_type=pubblicazione&page=ires-ps-github-updates') : admin_url('options-general.php?page=ires-pdf-reader');
-            echo '<a class="button" href="'.esc_url($url).'">Aggiorna singolarmente</a>';
+            $action=$id==='ps'?'ires_ps_gh_install':'ires_pdf_install_update';
+            echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="display:inline-block;margin:0">';
+            echo '<input type="hidden" name="action" value="'.esc_attr($action).'">';
+            echo '<input type="hidden" name="ires_shared_origin" value="'.esc_attr($origin).'">';
+            wp_nonce_field($action);
+            submit_button('Aggiorna singolarmente','secondary','submit',false);
+            echo '</form>';
         } else echo esc_html($item['installed']?'Nessun aggiornamento':'Plugin non installato');
         echo '</td></tr>';
         if($has) {
