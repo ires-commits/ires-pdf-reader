@@ -16,6 +16,13 @@
 
 # Changelog
 
+## 2.13.3
+- Indici tradotti come righe separate, con numeri di pagina allineati a destra e separatori discreti.
+- Corrette le sequenze di newline letterali e la ricomposizione delle righe dell'indice; i numeri di pagina non sono inviati al traduttore.
+- Nuova versione delle chiavi cache per evitare il riutilizzo di vecchie traduzioni con layout errato.
+- Richiesta verifica visiva in browser prima di avviare la pretraduzione massiva.
+
+
 ## 2.13.2
 - Correzione degli indici e delle pagine a struttura complessa: passaggio automatico alla modalità Lettura tradotta, evitando riquadri sovrapposti e testi troncati.
 - Pulizia dei separatori di paragrafo e delle sequenze puntinate nella visualizzazione fluida.
