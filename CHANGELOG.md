@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.12.0
+- Indicatore "Translating" esclusivamente sulla pagina attiva, selezionata dal centro dell'area di lettura; nessun indicatore sulle altre pagine.
+- Avanzamento percentuale reale per blocchi tradotti nella pagina (0–100%), senza stime artificiali durante il caricamento iniziale del modello.
+- Cache persistente IndexedDB nel browser per pagina e lingua, con chiave basata su fingerprint PDF e hash SHA-256 del testo originale: riapertura senza ritradurre la pagina già completata sullo stesso browser.
+- La cache conserva i blocchi e le coordinate dell'overlay, non solo il testo.
+- Scorrimento: elimina le pagine obsolete dalla coda e non memorizza traduzioni incomplete.
+- Limite attuale: la cache è per browser/dispositivo, non condivisa fra visitatori; una cache condivisa WordPress richiede controlli di integrità e sicurezza separati.
+
+
 ## 2.11.1
 - Risolto il blocco dell'interfaccia durante la traduzione neurale: download, inizializzazione e inferenza del modello vengono eseguiti in un Web Worker separato dal thread del lettore PDF.
 - La coda traduce esclusivamente la pagina attualmente al centro dell'area visibile, senza precaricare pagine adiacenti; interrompe l'elaborazione dei blocchi successivi se cambia pagina.
