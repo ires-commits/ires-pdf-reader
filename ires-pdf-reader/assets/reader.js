@@ -218,7 +218,7 @@ async function render(url,title,root,token,citation=''){
    layer.style.setProperty('--scale-factor',String(view.scale));
    const task=pdfjs.renderTextLayer({textContentSource:text,container:layer,viewport:view,textDivs:[]});
    await task.promise;
-   if(token===session&&epoch===modeEpoch){highlightText(layer);if(overlayEnabled)showOverlays();}
+   if(token===session&&epoch===modeEpoch){highlightText(layer);if(translationMode)showOverlays();}
   }
   async function setupContinuous(){
    const epoch=++modeEpoch;
@@ -413,7 +413,10 @@ async function render(url,title,root,token,citation=''){
    button.addEventListener('touchstart',()=>{const selected=readSelection();if(selected){cachedSelection=selected;cachedPosition=capturePosition();}},{passive:true});
   });
   // Translation is initiated only by a reader action; no background text transmission.
-  let translatedText='',translationGeneration=0,overlayEnabled=false,overlayPage=0,overlayBlocks=[];
+  // Translation is a persistent viewing mode, not a one-page action.
+  let translatedText='',translationGeneration=0,translationMode=false,translationWorker=false;
+  let translationActivePage=0;
+  const translationCache=new Map(),translationPending=new Set();
   const encoder=new TextEncoder();
   function splitTranslation(text,maxBytes=6500){
    const chunks=[];let remaining=text.trim();
@@ -421,10 +424,8 @@ async function render(url,title,root,token,citation=''){
     if(encoder.encode(remaining).length<=maxBytes){chunks.push(remaining);break;}
     let low=1,high=remaining.length;
     while(low<high){const mid=Math.ceil((low+high)/2);if(encoder.encode(remaining.slice(0,mid)).length<=maxBytes)low=mid;else high=mid-1;}
-    let cut=low;
-    const sentence=Math.max(remaining.lastIndexOf('. ',cut),remaining.lastIndexOf('! ',cut),remaining.lastIndexOf('? ',cut),remaining.lastIndexOf('\\n',cut));
-    if(sentence>cut*.5)cut=sentence+1;
-    else {const space=remaining.lastIndexOf(' ',cut);if(space>cut*.5)cut=space;}
+    let cut=low;const space=remaining.lastIndexOf(' ',cut);
+    if(space>cut*.5)cut=space;
     chunks.push(remaining.slice(0,cut).trim());remaining=remaining.slice(cut).trim();
    }
    return chunks.filter(Boolean);
@@ -434,7 +435,8 @@ async function render(url,title,root,token,citation=''){
     try{
      let sourceLanguage='it';
      if(window.LanguageDetector&&typeof window.LanguageDetector.create==='function'){
-      const detector=await window.LanguageDetector.create();const detected=await detector.detect(text);
+      const detector=await window.LanguageDetector.create();
+      const detected=await detector.detect(text);
       if(detected&&detected[0]&&detected[0].detectedLanguage)sourceLanguage=detected[0].detectedLanguage;
       if(detector.destroy)detector.destroy();
      }
@@ -443,7 +445,7 @@ async function render(url,title,root,token,citation=''){
      try{return await translator.translate(text);}finally{if(translator.destroy)translator.destroy();}
     }catch(error){console.info('Traduzione locale non disponibile',error);}
    }
-   if(!config.translationRemote||!config.translationApi)throw Error('Nessun motore di traduzione disponibile. Configura un endpoint HTTPS nelle impostazioni di IRES PDF Reader.');
+   if(!config.translationRemote||!config.translationApi)throw Error('Configura il motore di traduzione nelle impostazioni di IRES PDF Reader.');
    const response=await fetch(config.translationApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:'auto',target})});
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(data.message||'Servizio di traduzione non disponibile');
@@ -451,29 +453,12 @@ async function render(url,title,root,token,citation=''){
    return data.translatedText;
   }
   async function translateLong(text,target,generation){
-   const chunks=splitTranslation(text);const output=[];
-   for(let i=0;i<chunks.length;i++){
-    if(generation!==translationGeneration||token!==session)throw Error('Traduzione interrotta');
-    translationStatus.textContent='Traduzione in corso: blocco '+(i+1)+' di '+chunks.length;
-    output.push(await translateText(chunks[i],target));
+   const chunks=splitTranslation(text),output=[];
+   for(const chunk of chunks){
+    if(generation!==translationGeneration||token!==session||!translationMode)throw Error('Traduzione interrotta');
+    output.push(await translateText(chunk,target));
    }
    return output.join('\\n\\n');
-  }
-  function clearOverlays(){
-   root.querySelectorAll('.ires-pdf-translation-overlay').forEach(node=>node.remove());
-  }
-  function showOverlays(){
-   clearOverlays();if(!overlayEnabled||!overlayBlocks.length)return;
-   const holder=continuous?slots[overlayPage-1]:singlePage;
-   if(!holder||(!continuous&&page!==overlayPage))return;
-   // Coordinates are derived from PDF.js viewport transforms, never span indices.
-   for(const block of overlayBlocks){
-    const node=el('div','ires-pdf-translation-overlay',block.translation);
-    node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
-    node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
-    node.style.fontSize=Math.max(7,Math.min(12,block.fontSize*scale))+'px';
-    node.title=block.original;holder.append(node);
-   }
   }
   function extractLayoutBlocks(items,viewport){
    const lines=[];
@@ -482,122 +467,131 @@ async function render(url,title,root,token,citation=''){
     const [x,baseline]=viewport.convertToViewportPoint(item.transform[4],item.transform[5]);
     const font=Math.max(6,Math.abs(item.height||item.transform[3]||10));
     const width=Math.max(3,(item.width||item.str.length*font*.45)*viewport.scale);
-    const h=font*viewport.scale*1.3;
-    const y=baseline-h*.82;
+    const h=font*viewport.scale*1.3,y=baseline-h*.82;
     const line=lines.find(l=>Math.abs(l.y-y)<h*.55&&Math.abs(l.font-font)<font*.45);
     const segment={text:item.str,x,y,width,h,font};
-    if(line)line.parts.push(segment);
-    else lines.push({y,font,parts:[segment]});
+    if(line)line.parts.push(segment);else lines.push({y,font,parts:[segment]});
    }
    lines.sort((a,b)=>a.y-b.y);
    const ordered=lines.map(line=>{
     line.parts.sort((a,b)=>a.x-b.x);
-    const left=Math.min(...line.parts.map(p=>p.x));
-    const right=Math.max(...line.parts.map(p=>p.x+p.width));
+    const left=Math.min(...line.parts.map(p=>p.x)),right=Math.max(...line.parts.map(p=>p.x+p.width));
     return {x:left,y:Math.min(...line.parts.map(p=>p.y)),right,bottom:Math.max(...line.parts.map(p=>p.y+p.h)),font:line.font,text:line.parts.map(p=>p.text).join(' ').trim()};
    }).filter(l=>l.text);
-   // Group adjacent lines into paragraphs; separate columns and distant headings.
    const blocks=[];
    for(const line of ordered){
     const last=blocks[blocks.length-1];
-    const sameColumn=last&&Math.abs(line.x-last.x)<Math.max(24,last.font*3);
-    const nearby=last&&line.y-last.bottom<Math.max(12,last.font*1.7);
-    if(last&&sameColumn&&nearby&&last.text.length+line.text.length<1000){
+    if(last&&Math.abs(line.x-last.x)<Math.max(24,last.font*3)&&line.y-last.bottom<Math.max(12,last.font*1.7)&&last.text.length+line.text.length<1000){
      last.text+=' '+line.text;last.right=Math.max(last.right,line.right);last.bottom=Math.max(last.bottom,line.bottom);
     }else blocks.push({...line});
    }
    return blocks.map(b=>({x:b.x,y:b.y,width:b.right-b.x,height:b.bottom-b.y,fontSize:b.font,original:b.text}));
   }
-  overlayToggle.disabled=true;overlayToggle.title='Disponibile dopo la traduzione della pagina';
-  overlayToggle.onclick=()=>{
-   overlayEnabled=!overlayEnabled;overlayToggle.setAttribute('aria-pressed',String(overlayEnabled));
-   overlayToggle.textContent=overlayEnabled?'Mostra originale':'Mostra sul PDF';
-   translate.textContent=overlayEnabled?'Originale':'Traduci';showOverlays();
-  };
-  function visiblePageForTranslation(){
-   const center=viewport.getBoundingClientRect().top+viewport.clientHeight/2;
-   let closest=page,distance=Infinity;
-   for(let i=0;i<slots.length;i++){
-    const rect=slots[i].getBoundingClientRect();
-    if(rect.bottom<=viewport.getBoundingClientRect().top||rect.top>=viewport.getBoundingClientRect().bottom)continue;
-    const delta=Math.abs((rect.top+rect.bottom)/2-center);
-    if(delta<distance){distance=delta;closest=i+1;}
+  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay').forEach(node=>node.remove());}
+  function showOverlays(){
+   clearOverlays();if(!translationMode)return;
+   const targetPages=continuous?slots.map((_,i)=>i+1):[page];
+   for(const number of targetPages){
+    const entry=translationCache.get(language.value+':'+number);
+    if(!entry)continue;
+    const holder=continuous?slots[number-1]:singlePage;
+    if(!holder||!holder.querySelector('canvas'))continue;
+    for(const block of entry.blocks){
+     const node=el('div','ires-pdf-translation-overlay',block.translation);
+     node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
+     node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
+     node.style.fontSize=Math.max(7,Math.min(12,block.fontSize*scale))+'px';
+     node.title=block.original;holder.append(node);
+    }
    }
-   return closest;
   }
-  async function runTranslation(){
-   const generation=++translationGeneration,target=language.value;
-   // A previous selection must never override the currently displayed page.
-   const targetPage=continuous?visiblePageForTranslation():page;
-   const selection=window.getSelection();
-   const selectedText=readSelection().trim();
-   const selectedNode=selection&&selection.anchorNode;
-   const selectedHolder=selectedNode&&(selectedNode.nodeType===1?selectedNode:selectedNode.parentElement).closest('.ires-pdf-page-slot, .ires-pdf-single-page');
-   const selected=selectedHolder&&(!continuous||Number(selectedHolder.dataset.page)===targetPage)?selectedText:'';
-   let original=selected;
-   if(selected)translationTab.click();translationSource.textContent='';translationResult.textContent='';translatedText='';
-   translationStatus.textContent='Preparazione del testo…';translateAgain.disabled=true;
-   overlayBlocks=[];overlayPage=0;clearOverlays();overlayEnabled=false;
-   overlayToggle.textContent='Mostra sul PDF';overlayToggle.setAttribute('aria-pressed','false');overlayToggle.disabled=true;
-   translate.textContent='Traduzione…';translate.disabled=true;
+  function visiblePageForTranslation(){
+   if(!continuous)return page;
+   const rect=viewport.getBoundingClientRect(),center=(rect.top+rect.bottom)/2;
+   let nearest=page,distance=Infinity;
+   slots.forEach((slot,i)=>{
+    const box=slot.getBoundingClientRect();
+    if(box.bottom<=rect.top||box.top>=rect.bottom)return;
+    const delta=Math.abs((box.top+box.bottom)/2-center);
+    if(delta<distance){distance=delta;nearest=i+1;}
+   });
+   return nearest;
+  }
+  function queueVisibleTranslation(){
+   if(!translationMode||token!==session)return;
+   const number=visiblePageForTranslation();
+   translationActivePage=number;
+   if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent='Pagina '+number+' tradotta';}
+   if(!translationPending.has(number))translationPending.add(number);
+   if(!translationWorker)processTranslationQueue();
+  }
+  async function processTranslationQueue(){
+   if(translationWorker)return;
+   translationWorker=true;
+   const generation=translationGeneration,target=language.value;
    try{
-    let items=[];
-    if(!original){
-     const pdfPage=await doc.getPage(targetPage);
-     const textContent=await pdfPage.getTextContent();
-     items=textContent.items.filter(item=>item.str&&item.str.trim());
-     original=items.map(item=>item.str).join(' ').trim();
-    }
-    if(!original)throw Error('La pagina non contiene testo selezionabile. Potrebbe essere necessaria una versione OCR del PDF.');
-    translationSource.textContent=original;
-    translatedText=await translateLong(original,target,generation);
-    if(generation!==translationGeneration||token!==session)return;
-    translationResult.textContent=translatedText;
-    translationStatus.textContent='Traduzione completata · '+(selected?'testo selezionato':'pagina '+targetPage);
-    if(!selected){
-     overlayPage=targetPage;
-     const pdfPage=await doc.getPage(targetPage);
-     const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
-     const translatedBlocks=[];
-     // Translate paragraphs in small batches, preserving boundaries and coordinates.
-     // Unlike the old 18-block limit, dense pages are processed progressively.
-     const batchSize=6;
-     for(let start=0;start<layout.length;start+=batchSize){
-      if(generation!==translationGeneration||token!==session)return;
-      const batch=layout.slice(start,start+batchSize);
-      translationStatus.textContent='Sovrapposizione: paragrafi '+(start+1)+'–'+Math.min(start+batch.length,layout.length)+' di '+layout.length;
-      // Each paragraph has an independent result, so translation engines cannot
-      // accidentally merge or reorder paragraphs across a batch.
-      for(const block of batch){
-       if(generation!==translationGeneration||token!==session)return;
-       try{
-        const translation=await translateLong(block.original,target,generation);
-        translatedBlocks.push({...block,translation});
-       }catch(error){
-        if(generation!==translationGeneration||token!==session)return;
-        translationStatus.textContent='Traduzione parziale: '+translatedBlocks.length+' paragrafi pronti. '+(error.message||'Servizio non disponibile');
-        break;
-       }
+    while(translationMode&&generation===translationGeneration&&token===session&&translationPending.size){
+     const visible=visiblePageForTranslation();
+     let number=translationPending.has(visible)?visible:translationPending.values().next().value;
+     translationPending.delete(number);
+     const key=target+':'+number;
+     if(translationCache.has(key)){showOverlays();continue;}
+     try{
+      translationStatus.textContent='Traduzione pagina '+number+'…';
+      const pdfPage=await doc.getPage(number);
+      const content=await pdfPage.getTextContent();
+      const items=content.items.filter(item=>item.str&&item.str.trim());
+      const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
+      const translated=[];
+      for(let i=0;i<layout.length;i++){
+       if(!translationMode||generation!==translationGeneration||token!==session)break;
+       translationStatus.textContent='Pagina '+number+': '+(i+1)+' / '+layout.length+' blocchi';
+       const translation=await translateLong(layout[i].original,target,generation);
+       translated.push({...layout[i],translation});
       }
-      overlayBlocks=translatedBlocks.slice();
-      overlayToggle.disabled=!overlayBlocks.length;
-      if(overlayBlocks.length){overlayEnabled=true;overlayToggle.setAttribute('aria-pressed','true');overlayToggle.textContent='Mostra originale';translate.textContent='Originale';translate.disabled=false;showOverlays();}
-      if(translatedBlocks.length<start+batch.length)break;
+      if(!translationMode||generation!==translationGeneration||token!==session)break;
+      translationCache.set(key,{blocks:translated,original:items.map(item=>item.str).join(' '),translation:translated.map(block=>block.translation).join('\\n\\n')});
+      if(number===visiblePageForTranslation()){
+       translatedText=translationCache.get(key).translation;
+       translationSource.textContent=translationCache.get(key).original;
+       translationResult.textContent=translatedText;
+       translationStatus.textContent='Pagina '+number+' tradotta';
+      }
+      showOverlays();
+     }catch(error){
+      if(generation===translationGeneration)translationStatus.textContent='Pagina '+number+': '+(error.message||'traduzione non disponibile');
+      // Do not retry a failing page in a tight loop.
      }
-     if(generation!==translationGeneration||token!==session)return;
-     translationStatus.textContent=translatedBlocks.length===layout.length?
-      'Pagina '+targetPage+' pronta: '+layout.length+' paragrafi sovrapponibili.':
-      'Sovrapposizione parziale: '+translatedBlocks.length+' di '+layout.length+' paragrafi. Puoi riprovare quando il motore torna disponibile.';
     }
-   }catch(error){if(generation===translationGeneration)translationStatus.textContent=error.message||'Traduzione non disponibile';}
-   finally{if(generation===translationGeneration){translateAgain.disabled=false;translate.disabled=false;if(!overlayEnabled)translate.textContent='Traduci';}}
+   }finally{
+    translationWorker=false;
+    if(translationMode&&translationPending.size&&generation===translationGeneration)processTranslationQueue();
+   }
   }
-  translate.onclick=()=>{if(overlayEnabled){overlayEnabled=false;clearOverlays();overlayToggle.setAttribute('aria-pressed','false');overlayToggle.textContent='Mostra sul PDF';translate.textContent='Traduci';return;}if(overlayBlocks.length){overlayEnabled=true;showOverlays();overlayToggle.setAttribute('aria-pressed','true');overlayToggle.textContent='Mostra originale';translate.textContent='Originale';return;}runTranslation();};translateAgain.onclick=runTranslation;
-  language.onchange=()=>{translationGeneration++;overlayEnabled=false;overlayBlocks=[];clearOverlays();translatedText='';translationResult.textContent='';translationStatus.textContent='Lingua modificata: premi Traduci per aggiornare.';};
+  function setTranslationMode(enabled){
+   translationMode=enabled;translationGeneration++;
+   translationPending.clear();
+   translate.textContent=enabled?'Originale':'Traduci';
+   translate.setAttribute('aria-pressed',String(enabled));
+   overlayToggle.textContent=enabled?'Mostra originale':'Mostra sul PDF';
+   overlayToggle.setAttribute('aria-pressed',String(enabled));
+   if(!enabled){clearOverlays();translationStatus.textContent='Traduzione disattivata';}
+   else {queueVisibleTranslation();}
+  }
+  translate.onclick=()=>setTranslationMode(!translationMode);
+  translateAgain.onclick=()=>{translationCache.delete(language.value+':'+visiblePageForTranslation());if(!translationMode)setTranslationMode(true);else queueVisibleTranslation();};
+  overlayToggle.onclick=()=>setTranslationMode(!translationMode);
+  language.onchange=()=>{translationGeneration++;translationPending.clear();clearOverlays();if(translationMode)queueVisibleTranslation();};
   translationSpeak.onclick=()=>{
    if(!translatedText||!window.speechSynthesis||!window.SpeechSynthesisUtterance){translationStatus.textContent='Nessuna traduzione da leggere o voce non disponibile';return;}
    stopReading();const utterance=new SpeechSynthesisUtterance(translatedText);utterance.lang=language.value;window.speechSynthesis.speak(utterance);
   };
+  viewport.addEventListener('scroll',()=>{
+   if(!translationMode)return;
+   clearTimeout(translationScrollTimer);
+   translationScrollTimer=setTimeout(queueVisibleTranslation,220);
+  },{passive:true});
+  let translationScrollTimer=null;
   // SpeechSynthesis uses the device's installed voices; no document text is sent by this plugin.
   const synthesis=window.speechSynthesis;
   let speechGeneration=0,speechActive=false,speechPaused=false;
