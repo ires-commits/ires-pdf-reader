@@ -18,7 +18,10 @@ self.onmessage=async(event)=>{
   if(!pipelines.has(pair))pipelines.set(pair,factory('translation',models[pair]));
   let translator;
   try{translator=await pipelines.get(pair);}catch(error){pipelines.delete(pair);throw error;}
-  const result=await translator(text,{max_new_tokens:512});
+  // Bound decoding to input length: short TOC headings must not generate 512 tokens.
+  const words=(String(text).trim().match(/\S+/g)||[]).length;
+  const maxNewTokens=Math.min(192,Math.max(24,Math.ceil(words*2.8)+12));
+  const result=await translator(text,{max_new_tokens:maxNewTokens,num_beams:1,do_sample:false});
   if(!result||!result[0]||typeof result[0].translation_text!=='string')throw Error('Risposta locale non valida');
   self.postMessage({id,translation:result[0].translation_text});
  }catch(error){self.postMessage({id,error:String(error&&error.message||error)});}
