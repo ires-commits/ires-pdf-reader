@@ -448,6 +448,45 @@ async function render(url,title,root,token,citation=''){
   let translatedText='',translationGeneration=0,translationMode=false,translationWorker=false;
   let translationActivePage=0;
   const translationCache=new Map(),translationPending=new Set(),translationFailures=new Map();
+  const translationProgress=new Map();
+  let translationBusyPage=0;
+  // Persistent per-device cache, keyed by PDF fingerprint + page text digest + target language.
+  let translationDbPromise=null;
+  function translationDb(){
+   if(!window.indexedDB)return Promise.resolve(null);
+   if(!translationDbPromise)translationDbPromise=new Promise(resolve=>{
+    const request=indexedDB.open('ires-pdf-translations',1);
+    request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('pages'))request.result.createObjectStore('pages');};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>resolve(null);
+    request.onblocked=()=>resolve(null);
+   });
+   return translationDbPromise;
+  }
+  async function digestTranslationText(text){
+   if(!crypto.subtle)return null;
+   const bytes=await crypto.subtle.digest('SHA-256',encoder.encode(text));
+   return Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');
+  }
+  async function translationStorageKey(number,target,text){
+   const fingerprint=doc.fingerprints&&doc.fingerprints[0];
+   const hash=await digestTranslationText(text);
+   if(!fingerprint||!hash)return null;
+   return 'v1:'+fingerprint+':'+number+':'+target+':'+hash;
+  }
+  async function storedTranslation(key,value){
+   if(!key)return null;
+   const db=await translationDb();
+   if(!db)return null;
+   return new Promise(resolve=>{
+    try{
+     const tx=db.transaction('pages',value===undefined?'readonly':'readwrite');
+     const req=value===undefined?tx.objectStore('pages').get(key):tx.objectStore('pages').put(value,key);
+     req.onsuccess=()=>resolve(value===undefined?(req.result||null):true);
+     req.onerror=()=>resolve(null);
+    }catch(_){resolve(null);}
+   });
+  }
   const encoder=new TextEncoder();
   function splitTranslation(text,maxBytes=6500){
    const chunks=[];let remaining=text.trim();
@@ -554,26 +593,25 @@ async function render(url,title,root,token,citation=''){
   function showTranslationLoading(){
    clearTranslationLoading();
    if(!translationMode)return;
-   const pages=continuous?slots.map((slot,i)=>({holder:slot,number:i+1})).filter(({holder})=>{
-    const rect=holder.getBoundingClientRect(),v=viewport.getBoundingClientRect();
-    return rect.bottom>v.top&&rect.top<v.bottom;
-   }):[{holder:singlePage,number:page}];
-   for(const {holder,number} of pages){
-    const key=language.value+':'+number;
-    if(translationCache.has(key))continue;
-    const failure=translationFailures.get(key);
-    const loading=el('div','ires-pdf-translation-loading',failure&&Date.now()<failure.until?labels[language.value][27]:labels[language.value][2]+'…');
-    loading.setAttribute('role','status');
-    if(failure){
-     loading.classList.add('ires-pdf-translation-error');
-     const detail=el('span','ires-pdf-translation-error-detail',failure.message||labels[language.value][27]);
-     const retry=el('button','ires-pdf-translation-retry',uiLang==='it'?'Riprova':uiLang==='fr'?'Réessayer':uiLang==='de'?'Erneut versuchen':uiLang==='es'?'Reintentar':uiLang==='pt'?'Tentar novamente':'Retry');
-     retry.type='button';
-     retry.onclick=()=>{translationFailures.delete(key);translationPending.add(number);showTranslationLoading();if(!translationWorker)processTranslationQueue();};
-     loading.append(detail,retry);
-    }
-    holder.append(loading);
+   const number=visiblePageForTranslation(),holder=continuous?slots[number-1]:singlePage;
+   if(!holder)return;
+   const key=language.value+':'+number;
+   if(translationCache.has(key))return;
+   const failure=translationFailures.get(key);
+   // Do not show a spinner on a page that is not actually being translated.
+   if(!failure&&translationBusyPage!==number)return;
+   const progress=Math.max(0,Math.min(99,translationProgress.get(key)||0));
+   const loading=el('div','ires-pdf-translation-loading',failure&&Date.now()<failure.until?labels[language.value][27]:labels[language.value][2]+'… '+progress+'%');
+   loading.setAttribute('role','status');
+   if(failure){
+    loading.classList.add('ires-pdf-translation-error');
+    const detail=el('span','ires-pdf-translation-error-detail',failure.message||labels[language.value][27]);
+    const retry=el('button','ires-pdf-translation-retry',uiLang==='it'?'Riprova':uiLang==='fr'?'Réessayer':uiLang==='de'?'Erneut versuchen':uiLang==='es'?'Reintentar':uiLang==='pt'?'Tentar novamente':'Retry');
+    retry.type='button';
+    retry.onclick=()=>{translationFailures.delete(key);queueVisibleTranslation();};
+    loading.append(detail,retry);
    }
+   holder.append(loading);
   }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
@@ -632,17 +670,32 @@ async function render(url,title,root,token,citation=''){
      const key=target+':'+number;
      if(translationCache.has(key)){showOverlays();continue;}
      try{
+      translationBusyPage=number;
+      translationProgress.set(key,0);
+      showTranslationLoading();
       translationStatus.textContent='Traduzione pagina '+number+'…';
       const pdfPage=await doc.getPage(number);
       const content=await pdfPage.getTextContent();
       const items=content.items.filter(item=>item.str&&item.str.trim());
       const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
+      const original=items.map(item=>item.str).join(' ');
+      const storageKey=await translationStorageKey(number,target,original);
+      const previous=await storedTranslation(storageKey);
+      if(previous&&Array.isArray(previous.blocks)&&previous.blocks.length===layout.length){
+       translationCache.set(key,previous);
+       translationProgress.set(key,100);
+       translationBusyPage=0;
+       showOverlays();
+       continue;
+      }
       const translated=[];
       for(let i=0;i<layout.length;i++){
        if(!translationMode||generation!==translationGeneration||token!==session)break;
        translationStatus.textContent='Pagina '+number+': '+(i+1)+' / '+layout.length+' blocchi';
        const translation=await translateLong(layout[i].original,target,generation);
        translated.push({...layout[i],translation});
+       translationProgress.set(key,Math.round((i+1)/Math.max(1,layout.length)*100));
+       if(number===visiblePageForTranslation())showTranslationLoading();
       }
       if(!translationMode||generation!==translationGeneration||token!==session)break;
       translationCache.set(key,{blocks:translated,original:items.map(item=>item.str).join(' '),translation:translated.map(block=>block.translation).join('\\n\\n')});
@@ -652,8 +705,10 @@ async function render(url,title,root,token,citation=''){
        translationResult.textContent=translatedText;
        translationStatus.textContent='Pagina '+number+' tradotta';
       }
+      translationBusyPage=0;
       showOverlays();
      }catch(error){
+      translationBusyPage=0;
       if(generation===translationGeneration)translationStatus.textContent='Pagina '+number+': '+(error.message||'traduzione non disponibile');
       const previous=translationFailures.get(key);
       const attempts=(previous?previous.attempts:0)+1;
@@ -667,6 +722,7 @@ async function render(url,title,root,token,citation=''){
      }
     }
    }finally{
+    translationBusyPage=0;
     translationWorker=false;
     if(translationMode&&translationPending.size&&token===session)processTranslationQueue();
    }
@@ -674,6 +730,7 @@ async function render(url,title,root,token,citation=''){
   function setTranslationMode(enabled){
    translationMode=enabled;translationGeneration++;
    translationPending.clear();
+   translationBusyPage=0;
    translate.textContent=enabled?t(1):t(0);
    translate.setAttribute('aria-pressed',String(enabled));
    overlayToggle.textContent=enabled?t(24):t(23);
