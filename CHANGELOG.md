@@ -16,6 +16,13 @@
 
 # Changelog
 
+## 2.13.2
+- Correzione degli indici e delle pagine a struttura complessa: passaggio automatico alla modalità Lettura tradotta, evitando riquadri sovrapposti e testi troncati.
+- Pulizia dei separatori di paragrafo e delle sequenze puntinate nella visualizzazione fluida.
+- Ripristinato il collegamento effettivo alla cache condivisa WordPress, prima della traduzione e al completamento della pagina.
+- L'overlay sul PDF rimane per le pagine semplici; serve ulteriore test visuale su iOS e desktop.
+
+
 ## 2.13.1
 - Overlay Glass più uniforme, con sfocatura delicata, bordi ridotti e caratteri più leggibili.
 - Nuova modalità Lettura tradotta: pagina editoriale fluida, testo senza ritagli e pulsante per tornare al PDF.
