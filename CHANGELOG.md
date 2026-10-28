@@ -16,6 +16,13 @@
 
 # Changelog
 
+## 2.13.7
+- Indicatore di traduzione montato direttamente nel contenitore visibile del lettore, non più nel flusso delle pagine PDF.
+- Posizionamento flottante fisso nella parte inferiore della vista, visibile anche scorrendo il PDF o la lettura tradotta; supporto safe-area su iPhone.
+- Percentuale e barra di progresso mantenute, con messaggi nella lingua dell'interfaccia.
+- Correzione da verificare visivamente su desktop e iOS.
+
+
 ## 2.13.5
 - Indicatore di traduzione ancorato al lettore, sempre visibile durante lo scorrimento del PDF e nella lettura ottimizzata.
 - Barra di avanzamento sottile in stile Glass, percentuale e messaggi nella lingua dell'interfaccia.
