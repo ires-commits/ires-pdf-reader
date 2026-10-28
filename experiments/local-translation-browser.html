@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IRES PDF Reader - prova traduzione locale</title>
+<style>body{font:16px system-ui;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.5}textarea{width:100%;box-sizing:border-box;min-height:120px;padding:12px}button,select{padding:10px;margin:8px 6px 8px 0}output{display:block;white-space:pre-wrap;border:1px solid #ddd;padding:16px;min-height:80px}small{color:#555}</style>
+<h1>Prototipo: traduzione nel browser</h1>
+<p>Test sperimentale delle API di traduzione locale del browser. Non utilizza servizi remoti per inviare il testo. Il browser può scaricare un modello linguistico alla prima esecuzione.</p>
+<label>Testo da tradurre<textarea id="source">La ricerca scientifica sostiene le decisioni pubbliche e aiuta a comprendere le trasformazioni del territorio.</textarea></label>
+<label>Lingua di partenza <select id="from"><option value="it">Italiano</option><option value="en">English</option></select></label>
+<label>Lingua di arrivo <select id="to"><option value="en">English</option><option value="it">Italiano</option></select></label>
+<button id="run">Prova traduzione locale</button>
+<p id="status" role="status">Verifica delle capacità del browser in corso…</p>
+<output id="result"></output>
+<small>Questo test usa la Translator API sperimentale del browser, non ancora Bergamot incorporato. Nessun testo viene trasmesso da questa pagina a un servizio di traduzione. La disponibilità dipende dal browser e dal sistema operativo.</small>
+<script>
+'use strict';
+const status=document.getElementById('status'),result=document.getElementById('result'),run=document.getElementById('run');
+const api=globalThis.Translator;
+status.textContent=api&&typeof api.create==='function'?'Translator API disponibile: prova una traduzione.':'Translator API non disponibile in questo browser. Per la copertura universale occorrerà integrare un runtime WebAssembly e modelli locali.';
+run.onclick=async()=>{
+ const sourceLanguage=document.getElementById('from').value,targetLanguage=document.getElementById('to').value;
+ if(sourceLanguage===targetLanguage){status.textContent='Seleziona due lingue diverse.';return;}
+ if(!globalThis.Translator||typeof globalThis.Translator.create!=='function'){status.textContent='API locale non supportata: nessun servizio esterno verrà utilizzato.';return;}
+ run.disabled=true;result.textContent='';let translator;
+ try{
+  status.textContent='Verifica disponibilità modello…';
+  if(typeof globalThis.Translator.availability==='function'){
+   const availability=await globalThis.Translator.availability({sourceLanguage,targetLanguage});
+   if(availability==='unavailable')throw Error('Modello linguistico non disponibile su questo browser.');
+  }
+  status.textContent='Preparazione del modello locale…';
+  translator=await globalThis.Translator.create({sourceLanguage,targetLanguage});
+  status.textContent='Traduzione in corso…';
+  result.textContent=await translator.translate(document.getElementById('source').value);
+  status.textContent='Traduzione completata localmente.';
+ }catch(e){status.textContent='Impossibile tradurre: '+(e&&e.message||String(e));}
+ finally{if(translator&&typeof translator.destroy==='function')translator.destroy();run.disabled=false;}
+};
+</script></html>
