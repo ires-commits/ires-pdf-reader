@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 2.13.4
+ * Version: 2.13.5
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -10,14 +10,17 @@
  */
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
-require_once __DIR__.'/includes/shared-updates.php';
+// One canonical updater dashboard when both plugins are installed, regardless of load order.
+$ires_shared_canonical = WP_PLUGIN_DIR . '/ires-produzione-scientifica/includes/shared-updates.php';
+if (is_readable($ires_shared_canonical)) require_once $ires_shared_canonical;
+else require_once __DIR__.'/includes/shared-updates.php';
 require_once __DIR__.'/includes/passage-store.php';
 require_once __DIR__.'/includes/translation.php';
 require_once __DIR__.'/includes/translation-cache.php';
 register_activation_hook(__FILE__,['IRES_PDF_Passage_Store','install']);
 register_activation_hook(__FILE__,['IRES_PDF_Translation_Cache','install']);
 final class IRES_PDF_Reader {
- const VERSION='2.13.4';
+ const VERSION='2.13.5';
  static function init() {
   add_action('init',function(){if(get_option('ires_pdf_passage_schema')!=='1')IRES_PDF_Passage_Store::install();});
   add_action('rest_api_init',['IRES_PDF_Passage_Store','routes']);
