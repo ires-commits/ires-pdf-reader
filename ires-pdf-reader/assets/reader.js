@@ -632,15 +632,34 @@ async function render(url,title,root,token,citation=''){
      original:b.text,indexPage,indexNumber:match?match[2]:'',sourceText:match?match[1].trim():b.text.replace(/\s*\.{5,}\s*/g,' ').trim()};
    });
   }
+  const readingMessages={
+   it:{title:'Versione tradotta · Lettura ottimizzata',note:'Testo riorganizzato per facilitare la lettura. L’impaginazione può differire dal PDF originale.',noticeTitle:'Abbiamo ottimizzato la lettura',notice:'Questa pagina ha una struttura complessa: mostriamo una versione tradotta più leggibile. Puoi tornare al PDF originale in qualsiasi momento.',pdf:'Vista PDF',reading:'Lettura tradotta',back:'Torna al PDF',wait:'La traduzione della pagina è in preparazione…',page:'Pagina',of:'di',close:'Ho capito'},
+   en:{title:'Translated version · Optimized reading',note:'Text is reorganized for easier reading. Layout may differ from the original PDF.',noticeTitle:'Reading view optimized',notice:'This page has a complex layout, so we are showing a more readable translated version. You can return to the original PDF at any time.',pdf:'PDF view',reading:'Translated reading',back:'Back to PDF',wait:'Preparing this page’s translation…',page:'Page',of:'of',close:'Got it'},
+   fr:{title:'Version traduite · Lecture optimisée',note:'Le texte est réorganisé pour faciliter la lecture. La mise en page peut différer du PDF original.',noticeTitle:'Lecture optimisée',notice:'Cette page est complexe : nous affichons une traduction plus lisible. Vous pouvez revenir au PDF original à tout moment.',pdf:'Vue PDF',reading:'Lecture traduite',back:'Retour au PDF',wait:'Préparation de la traduction…',page:'Page',of:'sur',close:'Compris'},
+   de:{title:'Übersetzte Version · Optimierte Leseansicht',note:'Der Text wurde für bessere Lesbarkeit neu angeordnet. Das Layout kann vom Original-PDF abweichen.',noticeTitle:'Leseansicht optimiert',notice:'Diese Seite hat ein komplexes Layout. Wir zeigen eine besser lesbare Übersetzung. Sie können jederzeit zum Original-PDF zurückkehren.',pdf:'PDF-Ansicht',reading:'Übersetzte Ansicht',back:'Zurück zum PDF',wait:'Übersetzung wird vorbereitet…',page:'Seite',of:'von',close:'Verstanden'},
+   es:{title:'Versión traducida · Lectura optimizada',note:'El texto se reorganiza para facilitar la lectura. El diseño puede diferir del PDF original.',noticeTitle:'Lectura optimizada',notice:'Esta página tiene un diseño complejo. Mostramos una traducción más legible. Puedes volver al PDF original en cualquier momento.',pdf:'Vista PDF',reading:'Lectura traducida',back:'Volver al PDF',wait:'Preparando la traducción…',page:'Página',of:'de',close:'Entendido'},
+   pt:{title:'Versão traduzida · Leitura otimizada',note:'O texto foi reorganizado para facilitar a leitura. O layout pode diferir do PDF original.',noticeTitle:'Leitura otimizada',notice:'Esta página tem um layout complexo. Mostramos uma tradução mais legível. Pode voltar ao PDF original a qualquer momento.',pdf:'Vista PDF',reading:'Leitura traduzida',back:'Voltar ao PDF',wait:'A preparar a tradução…',page:'Página',of:'de',close:'Entendi'}
+  };
+  const readingI18n=readingMessages[uiLang]||readingMessages.en;
+  let readingNoticeDismissed=false,readingAutoOptOut=false;
   function renderReadingView(){
    if(!readingMode)return;
    const number=translationActivePage||page,entry=translationCache.get(language.value+':'+number);
    const header=el('header','ires-pdf-reading-header');
    const eyebrow=el('span','ires-pdf-reading-eyebrow','IRES · READING EXPERIENCE');
-   const heading=el('h2','','Lettura tradotta');
-   const meta=el('p','','Pagina '+number+' di '+doc.numPages+' · '+language.options[language.selectedIndex].text);
-   const back=el('button','ires-pdf-reading-back','Torna al PDF');back.type='button';back.onclick=()=>setReadingMode(false);
-   header.append(eyebrow,heading,meta,back);
+   const heading=el('h2','',readingI18n.title);
+   const note=el('p','ires-pdf-reading-note',readingI18n.note);
+   const meta=el('p','',readingI18n.page+' '+number+' '+readingI18n.of+' '+doc.numPages+' · '+language.options[language.selectedIndex].text);
+   const back=el('button','ires-pdf-reading-back',readingI18n.back);back.type='button';back.onclick=()=>{readingAutoOptOut=true;setReadingMode(false);};
+   header.append(eyebrow,heading,note,meta,back);
+   if(!readingNoticeDismissed){
+    const notice=el('div','ires-pdf-reading-notice');notice.setAttribute('role','status');
+    const copy=el('div','ires-pdf-reading-notice-copy');
+    copy.append(el('strong','',readingI18n.noticeTitle),el('p','',readingI18n.notice));
+    const dismiss=el('button','ires-pdf-reading-dismiss',readingI18n.close);dismiss.type='button';
+    dismiss.onclick=()=>{readingNoticeDismissed=true;renderReadingView();};
+    notice.append(copy,dismiss);header.append(notice);
+   }
    const article=el('article','ires-pdf-reading-article');
    if(entry&&Array.isArray(entry.blocks)){
     entry.blocks.forEach((block,i)=>{
@@ -656,7 +675,7 @@ async function render(url,title,root,token,citation=''){
       article.append(el(isHeading?'h3':'p','',value));
      }
     });
-   }else article.append(el('p','ires-pdf-reading-wait','La traduzione della pagina è in preparazione…'));
+   }else article.append(el('p','ires-pdf-reading-wait',readingI18n.wait));
    readingView.replaceChildren(header,article);
   }
   function setReadingMode(enabled){
@@ -664,7 +683,7 @@ async function render(url,title,root,token,citation=''){
    readingView.hidden=!readingMode;viewport.hidden=readingMode;
    workspace.classList.toggle('ires-pdf-reading-active',readingMode);
    readingToggle.setAttribute('aria-pressed',String(readingMode));
-   readingToggle.textContent=readingMode?'Vista PDF':'Lettura tradotta';
+   readingToggle.textContent=readingMode?readingI18n.pdf:readingI18n.reading;
    if(readingMode){renderReadingView();readingView.scrollTop=0;}else showOverlays();
   }
   readingToggle.onclick=()=>setReadingMode(!readingMode);
@@ -703,7 +722,7 @@ async function render(url,title,root,token,citation=''){
     const entry=translationCache.get(language.value+':'+number);
     if(!entry)continue;
     if(isComplexTranslationPage(entry.blocks)){
-     if(!readingMode&&number===visiblePageForTranslation()){
+     if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation()){
       setReadingMode(true);
       return;
      }
@@ -831,6 +850,8 @@ async function render(url,title,root,token,citation=''){
   function setTranslationMode(enabled){
    translationMode=enabled;translationGeneration++;
    readingToggle.hidden=!enabled;
+   readingAutoOptOut=false;
+   readingToggle.textContent=readingI18n.reading;
    if(!enabled)setReadingMode(false);
    translationPending.clear();
    translationBusyPage=0;
