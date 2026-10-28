@@ -24,7 +24,8 @@ final class IRES_PDF_GitHub_Updater {
  static function install_update() {
   if (!current_user_can('update_plugins')) wp_die('Permessi insufficienti.');
   check_admin_referer('ires_pdf_install_update');
-  $return=admin_url('options-general.php?page=ires-pdf-reader');
+  $origin=isset($_POST['ires_shared_origin'])?sanitize_key(wp_unslash($_POST['ires_shared_origin'])):'';
+  $return=$origin==='ps'?admin_url('edit.php?post_type=pubblicazione&page=ires-ps-github-updates'):admin_url('options-general.php?page=ires-pdf-reader');
   if (get_transient('ires_pdf_reader_upgrade_lock')) {
    wp_safe_redirect(add_query_arg('ires_pdf_upgrade','busy',$return));exit;
   }
