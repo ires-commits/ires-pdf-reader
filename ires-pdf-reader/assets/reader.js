@@ -62,7 +62,8 @@ async function render(url,title,root,token,citation=''){
  zoomGroup.append(minus,zoomLabel,plus,fit);
  viewGroup.append(sidebarToggle,mode,fullscreen);
  searchGroup.append(search,find,prevMatch,nextMatch,searchInfo);
- actionsGroup.append(bookmark,annotate,passage,cite,share,translate,speech,speechPause,speechStop,speechRate);
+ const readingToggle=el('button','ires-pdf-reading-toggle','Lettura tradotta');readingToggle.type='button';readingToggle.hidden=true;
+ actionsGroup.append(bookmark,annotate,passage,cite,share,translate,readingToggle,speech,speechPause,speechStop,speechRate);
  const toolsToggle=el('button','ires-pdf-tools-toggle','Strumenti');toolsToggle.type='button';toolsToggle.setAttribute('aria-expanded','false');toolsToggle.setAttribute('aria-controls','ires-pdf-extra-tools');
  const extraTools=el('div','ires-pdf-extra-tools');extraTools.id='ires-pdf-extra-tools';extraTools.append(searchGroup,actionsGroup);
  toolsToggle.onclick=()=>{
@@ -111,7 +112,8 @@ async function render(url,title,root,token,citation=''){
  translationPanel.append(language,translateAgain,overlayToggle,translationSpeak,translationClose,translationStatus,translationSource,translationResult);
  tabs.append(thumbsTab,outlineTab,resultsTab,bookmarksTab,notesTab,translationTab);sidebar.append(tabs,thumbList,outlineList,resultsList,bookmarksList,notesList,translationPanel);
  const viewport=el('div','ires-pdf-pages');const singlePage=el('div','ires-pdf-single-page');const canvas=el('canvas');const singleText=el('div','ires-pdf-text-layer');singlePage.append(canvas,singleText);viewport.append(singlePage);
- workspace.append(sidebarBackdrop,sidebar,viewport);
+ const readingView=el('section','ires-pdf-reading-view');readingView.hidden=true;
+ workspace.append(sidebarBackdrop,sidebar,viewport,readingView);
  const controlsShell=el('div','ires-pdf-controls-shell');
  controlsShell.append(toolbar,extraTools);
  content.append(translationOffer,controlsShell,workspace);
