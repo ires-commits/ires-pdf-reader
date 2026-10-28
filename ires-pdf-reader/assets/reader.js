@@ -587,7 +587,7 @@ async function render(url,title,root,token,citation=''){
     if(generation!==translationGeneration||token!==session||!translationMode)throw Error('Traduzione interrotta');
     output.push(await translateText(chunk,target));
    }
-   return output.join('\\n\\n');
+   return output.join(' ');
   }
   function isComplexTranslationPage(blocks){
    if(!blocks||!blocks.length)return false;
@@ -596,7 +596,7 @@ async function render(url,title,root,token,citation=''){
    return dotted>=2||narrow>=3;
   }
   function cleanTranslatedText(value){
-   return String(value||'').replace(/\\\\n/g,' ').replace(/\s*\.{5,}\s*/g,' · ').replace(/\s+/g,' ').trim();
+   return String(value||'').replace(/(?:\\\\n|\\n|\r\n|\r)/g,' ').replace(/\s*\.{5,}\s*/g,' · ').replace(/\s+/g,' ').trim();
   }
   function extractLayoutBlocks(items,viewport){
    const lines=[];
@@ -606,7 +606,7 @@ async function render(url,title,root,token,citation=''){
     const font=Math.max(6,Math.abs(item.height||item.transform[3]||10));
     const width=Math.max(3,(item.width||item.str.length*font*.45)*viewport.scale);
     const h=font*viewport.scale*1.3,y=baseline-h*.82;
-    const line=lines.find(l=>Math.abs(l.y-y)<h*.55&&Math.abs(l.font-font)<font*.45);
+    let line=lines.find(l=>Math.abs(l.y-y)<h*.45&&Math.abs(l.font-font)<font*.4);
     const segment={text:item.str,x,y,width,h,font};
     if(line)line.parts.push(segment);else lines.push({y,font,parts:[segment]});
    }
@@ -614,16 +614,23 @@ async function render(url,title,root,token,citation=''){
    const ordered=lines.map(line=>{
     line.parts.sort((a,b)=>a.x-b.x);
     const left=Math.min(...line.parts.map(p=>p.x)),right=Math.max(...line.parts.map(p=>p.x+p.width));
-    return {x:left,y:Math.min(...line.parts.map(p=>p.y)),right,bottom:Math.max(...line.parts.map(p=>p.y+p.h)),font:line.font,text:line.parts.map(p=>p.text).join(' ').trim()};
+    const text=line.parts.map(p=>p.text).join(' ').replace(/\s+/g,' ').trim();
+    return {x:left,y:Math.min(...line.parts.map(p=>p.y)),right,bottom:Math.max(...line.parts.map(p=>p.y+p.h)),font:line.font,text};
    }).filter(l=>l.text);
+   const indexPage=ordered.filter(l=>/\.{5,}|…{3,}/.test(l.text)).length>=2;
    const blocks=[];
    for(const line of ordered){
     const last=blocks[blocks.length-1];
-    if(last&&Math.abs(line.x-last.x)<Math.max(24,last.font*3)&&line.y-last.bottom<Math.max(12,last.font*1.7)&&last.text.length+line.text.length<1000){
+    // Never merge index entries: each printed line is its own semantic unit.
+    if(!indexPage&&last&&Math.abs(line.x-last.x)<Math.max(24,last.font*3)&&line.y-last.bottom<Math.max(12,last.font*1.7)&&last.text.length+line.text.length<1000){
      last.text+=' '+line.text;last.right=Math.max(last.right,line.right);last.bottom=Math.max(last.bottom,line.bottom);
     }else blocks.push({...line});
    }
-   return blocks.map(b=>({x:b.x,y:b.y,width:b.right-b.x,height:b.bottom-b.y,fontSize:b.font,original:b.text}));
+   return blocks.map(b=>{
+    const match=indexPage&&b.text.match(/^(.*?)(?:\s*\.{4,}\s*)([0-9ivxlcdm]+)\s*$/i);
+    return {x:b.x,y:b.y,width:b.right-b.x,height:b.bottom-b.y,fontSize:b.font,
+     original:b.text,indexPage,indexNumber:match?match[2]:'',sourceText:match?match[1].trim():b.text.replace(/\s*\.{5,}\s*/g,' ').trim()};
+   });
   }
   function renderReadingView(){
    if(!readingMode)return;
@@ -639,8 +646,15 @@ async function render(url,title,root,token,citation=''){
     entry.blocks.forEach((block,i)=>{
      const value=cleanTranslatedText(block.translation);
      if(!value)return;
-     const isHeading=value.length<125&&block.original.length<125&&i<5;
-     article.append(el(isHeading?'h3':'p','',value));
+     if(block.indexPage){
+      const line=el('div','ires-pdf-reading-index-line');
+      line.append(el('span','ires-pdf-reading-index-label',value));
+      if(block.indexNumber)line.append(el('span','ires-pdf-reading-index-number',block.indexNumber));
+      article.append(line);
+     }else{
+      const isHeading=value.length<125&&block.original.length<125&&i<5;
+      article.append(el(isHeading?'h3':'p','',value));
+     }
     });
    }else article.append(el('p','ires-pdf-reading-wait','La traduzione della pagina è in preparazione…'));
    readingView.replaceChildren(header,article);
@@ -776,7 +790,7 @@ async function render(url,title,root,token,citation=''){
       for(let i=0;i<layout.length;i++){
        if(!translationMode||generation!==translationGeneration||token!==session||number!==visiblePageForTranslation())break;
        translationStatus.textContent='Pagina '+number+': '+(i+1)+' / '+layout.length+' blocchi';
-       const translation=await translateLong(layout[i].original,target,generation);
+       const translation=await translateLong(layout[i].sourceText||layout[i].original,target,generation);
        translated.push({...layout[i],translation});
        translationProgress.set(key,Math.round((i+1)/Math.max(1,layout.length)*100));
        if(number===visiblePageForTranslation())showTranslationLoading();
