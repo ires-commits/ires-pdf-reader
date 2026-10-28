@@ -1,4 +1,8 @@
 ## 2.11.2
+
+## 2.12.2
+- Aggiornamenti GitHub: ritorno alla pagina di provenienza per aggiornamenti singoli e congiunti; origine validata e conservata nelle richieste amministrative.
+
 - Pannello condiviso degli aggiornamenti IRES con versioni e note delle release.
 - Controllo congiunto e aggiornamento sequenziale di entrambi i plugin quando necessario.
 
