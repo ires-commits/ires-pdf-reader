@@ -31,6 +31,9 @@ final class IRES_PDF_Translation {
   $target=strtolower(sanitize_text_field((string)$request->get_param('target')));
   if(!$text||strlen($text)>10000||!preg_match('/^(auto|[a-z]{2}(?:-[a-z]{2})?)$/',$source)||!preg_match('/^[a-z]{2}(?:-[a-z]{2})?$/',$target))
    return new WP_Error('ires_translation_invalid','Richiesta non valida (massimo 10 KB)',['status'=>400]);
+  $cache_key='ires_pdf_translation_'.hash('sha256',$provider.'|'.$source.'|'.$target.'|'.$text);
+  $cached=get_transient($cache_key);
+  if(is_string($cached))return rest_ensure_response(['translatedText'=>$cached]);
   $ip=isset($_SERVER['REMOTE_ADDR'])?(string)$_SERVER['REMOTE_ADDR']:'';
   $key='ires_pdf_translate_rate_'.hash_hmac('sha256',$ip,wp_salt('auth'));
   $count=(int)get_transient($key);
@@ -58,6 +61,7 @@ final class IRES_PDF_Translation {
   $data=json_decode(wp_remote_retrieve_body($response),true);
   $translated=$provider==='deepl'?($data['translations'][0]['text']??null):($data['translatedText']??null);
   if(!is_string($translated))return new WP_Error('ires_translation_response','Risposta non valida',['status'=>502]);
+  set_transient($cache_key,$translated,7*DAY_IN_SECONDS);
   return rest_ensure_response(['translatedText'=>$translated]);
  }
 }
