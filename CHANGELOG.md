@@ -16,6 +16,14 @@
 
 # Changelog
 
+## 2.13.0
+- Overlay tradotto Glass: sfondo chiaro satinato, sfocatura moderata del PDF sottostante, tipografia di sistema, contrasto e fallback per ridotta trasparenza.
+- Cache condivisa delle traduzioni per pagina in MySQL WordPress: chiave con fingerprint PDF, pagina, lingua e hash del testo; recupero prima di avviare il modello neurale.
+- Lettura pubblica della cache; pubblicazione delle traduzioni condivise limitata agli amministratori autenticati per evitare avvelenamento dei risultati da parte di visitatori anonimi. I visitatori mantengono la cache locale IndexedDB.
+- Scorrimento: annulla il lavoro Web Worker della pagina precedente e dà priorità alla nuova pagina visibile.
+- Restano da completare: distribuzione self-hosted dei modelli e delle librerie WebAssembly (attualmente caricati da CDN/Hugging Face), benchmarking su dispositivi e procedura di validazione delle traduzioni prima della pubblicazione condivisa.
+
+
 ## 2.12.3
 - Ridotto il numero massimo di token generati dal motore locale in proporzione alla lunghezza del testo: evita che titoli brevi dell'indice inneschino decodifiche molto lunghe.
 - Segmenti fino a 450 byte e watchdog di 25 secondi per richiesta; eventuali errori restano visibili con pulsante Riprova.
