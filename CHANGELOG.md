@@ -1,3 +1,7 @@
+## 2.12.4 — 28 ottobre 2026
+- Riallineato il versioning alla 2.12.3 già installata, evitando la regressione introdotta dalla numerazione 2.11.3.
+- Conservate le correzioni del pannello aggiornamenti condiviso e quelle alla traduzione presenti nel ramo principale.
+
 ## 2.11.3
 - Rimossa la diagnostica aggiornamenti ridondante dalla pagina impostazioni; rimane il pannello aggiornamenti condiviso.
 - Corretto Aggiorna singolarmente con handler condiviso e selezione del plugin; note di rilascio richiudibili.
