@@ -757,7 +757,8 @@ async function render(url,title,root,token,citation=''){
       const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
       const original=items.map(item=>item.str).join(' ');
       const storageKey=await translationStorageKey(number,target,original);
-      const previous=await storedTranslation(storageKey);
+      const previous=await storedTranslation(storageKey)||await sharedTranslation(storageKey);
+      if(previous&&storageKey)storedTranslation(storageKey,previous).catch(()=>{});
       if(previous&&Array.isArray(previous.blocks)&&previous.blocks.length===layout.length){
        translationCache.set(key,previous);
        translationProgress.set(key,100);
@@ -784,6 +785,7 @@ async function render(url,title,root,token,citation=''){
       if(number!==visiblePageForTranslation()||translated.length!==layout.length)continue;
       translationCache.set(key,{blocks:translated,original,translation:translated.map(block=>block.translation).join('\\n\\n')});
       await storedTranslation(storageKey,translationCache.get(key));
+      sharedTranslation(storageKey,translationCache.get(key)).catch(()=>{});
       if(number===visiblePageForTranslation()){
        translatedText=translationCache.get(key).translation;
        translationSource.textContent=translationCache.get(key).original;
