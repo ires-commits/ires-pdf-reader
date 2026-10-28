@@ -8,6 +8,12 @@
 
 # Changelog
 
+## 2.12.3
+- Ridotto il numero massimo di token generati dal motore locale in proporzione alla lunghezza del testo: evita che titoli brevi dell'indice inneschino decodifiche molto lunghe.
+- Segmenti fino a 450 byte e watchdog di 25 secondi per richiesta; eventuali errori restano visibili con pulsante Riprova.
+- Correzione mirata al caso indice PDF con avanzamento fermo al 25%; comportamento reale ancora da verificare nel browser dell'utente.
+
+
 ## 2.12.1
 - Watchdog di 45 secondi per ogni richiesta al motore neurale: un'elaborazione bloccata viene interrotta e il Web Worker ricreato, anziché lasciare la percentuale congelata indefinitamente.
 - Segmenti di traduzione ridotti a 1200 byte per limitare il carico di inferenza per richiesta.
