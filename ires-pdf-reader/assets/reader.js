@@ -692,15 +692,16 @@ async function render(url,title,root,token,citation=''){
   function showTranslationLoading(){
    clearTranslationLoading();
    if(!translationMode)return;
-   const number=visiblePageForTranslation(),holder=continuous?slots[number-1]:singlePage;
-   if(!holder)return;
+   const number=visiblePageForTranslation();
    const key=language.value+':'+number;
    if(translationCache.has(key))return;
    const failure=translationFailures.get(key);
    // Do not show a spinner on a page that is not actually being translated.
    if(!failure&&translationBusyPage!==number)return;
    const progress=Math.max(0,Math.min(99,translationProgress.get(key)||0));
-   const loading=el('div','ires-pdf-translation-loading',failure&&Date.now()<failure.until?labels[language.value][27]:labels[language.value][2]+'… '+progress+'%');
+   const loading=el('div','ires-pdf-translation-loading');
+   loading.append(el('span','ires-pdf-translation-loading-label',failure&&Date.now()<failure.until?labels[uiLang][27]:labels[uiLang][2]+'… '+progress+'%'));
+   if(!failure){const track=el('div','ires-pdf-translation-track');const fill=el('div','ires-pdf-translation-fill');fill.style.width=progress+'%';track.append(fill);loading.append(track);}
    loading.setAttribute('role','status');
    if(failure){
     loading.classList.add('ires-pdf-translation-error');
@@ -710,7 +711,7 @@ async function render(url,title,root,token,citation=''){
     retry.onclick=()=>{translationFailures.delete(key);queueVisibleTranslation();};
     loading.append(detail,retry);
    }
-   holder.append(loading);
+   workspace.append(loading);
   }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
