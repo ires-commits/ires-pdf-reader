@@ -447,7 +447,7 @@ async function render(url,title,root,token,citation=''){
   });
   // Translation is initiated only by a reader action; no background text transmission.
   // Translation is a persistent viewing mode, not a one-page action.
-  let translatedText='',translationGeneration=0,translationMode=false,translationWorker=false;
+  let translatedText='',translationGeneration=0,translationMode=false,translationWorker=false,readingMode=false;
   let translationActivePage=0;
   const translationCache=new Map(),translationPending=new Set(),translationFailures=new Map();
   const translationProgress=new Map();
@@ -616,6 +616,35 @@ async function render(url,title,root,token,citation=''){
    }
    return blocks.map(b=>({x:b.x,y:b.y,width:b.right-b.x,height:b.bottom-b.y,fontSize:b.font,original:b.text}));
   }
+  function renderReadingView(){
+   if(!readingMode)return;
+   const number=translationActivePage||page,entry=translationCache.get(language.value+':'+number);
+   const header=el('header','ires-pdf-reading-header');
+   const eyebrow=el('span','ires-pdf-reading-eyebrow','IRES · READING EXPERIENCE');
+   const heading=el('h2','','Lettura tradotta');
+   const meta=el('p','','Pagina '+number+' di '+doc.numPages+' · '+language.options[language.selectedIndex].text);
+   const back=el('button','ires-pdf-reading-back','Torna al PDF');back.type='button';back.onclick=()=>setReadingMode(false);
+   header.append(eyebrow,heading,meta,back);
+   const article=el('article','ires-pdf-reading-article');
+   if(entry&&Array.isArray(entry.blocks)){
+    entry.blocks.forEach((block,i)=>{
+     const value=String(block.translation||'').split('\\n').join(' ').trim();
+     if(!value)return;
+     const isHeading=value.length<125&&block.original.length<125&&i<5;
+     article.append(el(isHeading?'h3':'p','',value));
+    });
+   }else article.append(el('p','ires-pdf-reading-wait','La traduzione della pagina è in preparazione…'));
+   readingView.replaceChildren(header,article);
+  }
+  function setReadingMode(enabled){
+   readingMode=Boolean(enabled&&translationMode);
+   readingView.hidden=!readingMode;viewport.hidden=readingMode;
+   workspace.classList.toggle('ires-pdf-reading-active',readingMode);
+   readingToggle.setAttribute('aria-pressed',String(readingMode));
+   readingToggle.textContent=readingMode?'Vista PDF':'Lettura tradotta';
+   if(readingMode){renderReadingView();readingView.scrollTop=0;}else showOverlays();
+  }
+  readingToggle.onclick=()=>setReadingMode(!readingMode);
   function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay').forEach(node=>node.remove());}
   function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
   function showTranslationLoading(){
@@ -656,13 +685,15 @@ async function render(url,title,root,token,citation=''){
      const node=el('div','ires-pdf-translation-overlay',block.translation);
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
-     node.style.fontSize=Math.max(7,Math.min(12,block.fontSize*scale))+'px';
+     node.style.fontSize=Math.max(9,Math.min(15,block.fontSize*scale))+'px';
      node.title=block.original;holder.append(node);
     }
    }
    showTranslationLoading();
+   if(readingMode)renderReadingView();
   }
   function visiblePageForTranslation(){
+   if(readingMode)return translationActivePage||page;
    if(!continuous)return page;
    const rect=viewport.getBoundingClientRect(),center=(rect.top+rect.bottom)/2;
    let nearest=page,distance=Infinity;
@@ -766,6 +797,8 @@ async function render(url,title,root,token,citation=''){
   }
   function setTranslationMode(enabled){
    translationMode=enabled;translationGeneration++;
+   readingToggle.hidden=!enabled;
+   if(!enabled)setReadingMode(false);
    translationPending.clear();
    translationBusyPage=0;
    translate.textContent=enabled?t(1):t(0);
