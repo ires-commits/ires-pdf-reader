@@ -1,3 +1,7 @@
+## 2.11.2
+- Pannello condiviso degli aggiornamenti IRES con versioni e note delle release.
+- Controllo congiunto e aggiornamento sequenziale di entrambi i plugin quando necessario.
+
 # Changelog
 
 ## 2.12.0
