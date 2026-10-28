@@ -536,7 +536,10 @@ async function render(url,title,root,token,citation=''){
   }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
-   const targetPages=continuous?slots.map((_,i)=>i+1):[page];
+   const targetPages=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
+    const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
+    return rect.bottom>v.top&&rect.top<v.bottom;
+   }).map(({n})=>n):[page];
    for(const number of targetPages){
     const entry=translationCache.get(language.value+':'+number);
     if(!entry)continue;
