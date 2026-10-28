@@ -7,7 +7,20 @@ function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.cla
 function close(){stopSpeech();session++;if(!active)return;active.remove();active=null;document.body.style.overflow='';document.removeEventListener('keydown',keys);if(lastFocus&&lastFocus.focus)lastFocus.focus();}
 function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){const controls=[...active.querySelectorAll('a,button,input')].filter(x=>!x.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
 async function render(url,title,root,token,citation=''){
+ const browserLang=(navigator.languages&&navigator.languages[0]||navigator.language||'it').toLowerCase().split('-')[0];
+ const supported=['it','en','fr','de','es','pt'];
+ const uiLang=supported.includes(browserLang)?browserLang:(browserLang==='it'?'it':'en');
+ const labels={
+  it:['Traduci','Originale','Traduzione in corso','Attiva la traduzione del documento','Attiva','Non ora','Pagina','Strumenti','Cerca','Adatta','Singola','Continuo','Traduzione','Miniature','Indice','Risultati','Segnalibri','Note','Ascolta','Pausa','Citazione','Condividi','Chiudi','Mostra sul PDF','Mostra originale','Pagina precedente','Pagina successiva','Traduzione non disponibile'],
+  en:['Translate','Original','Translating','Translate this document into English?','Translate','Not now','Page','Tools','Search','Fit','Single','Continuous','Translation','Thumbnails','Contents','Results','Bookmarks','Notes','Listen','Pause','Citation','Share','Close','Show on PDF','Show original','Previous page','Next page','Translation unavailable'],
+  fr:['Traduire','Original','Traduction en cours','Traduire ce document en français ?','Traduire','Plus tard','Page','Outils','Rechercher','Ajuster','Page unique','Continu','Traduction','Miniatures','Sommaire','Résultats','Favoris','Notes','Écouter','Pause','Citation','Partager','Fermer','Afficher sur le PDF','Afficher l’original','Page précédente','Page suivante','Traduction indisponible'],
+  de:['Übersetzen','Original','Übersetzung läuft','Dieses Dokument ins Deutsche übersetzen?','Übersetzen','Später','Seite','Werkzeuge','Suchen','Anpassen','Einzelseite','Fortlaufend','Übersetzung','Vorschau','Inhalt','Ergebnisse','Lesezeichen','Notizen','Vorlesen','Pause','Zitat','Teilen','Schließen','Im PDF anzeigen','Original anzeigen','Vorherige Seite','Nächste Seite','Übersetzung nicht verfügbar'],
+  es:['Traducir','Original','Traduciendo','¿Traducir este documento al español?','Traducir','Ahora no','Página','Herramientas','Buscar','Ajustar','Una página','Continuo','Traducción','Miniaturas','Índice','Resultados','Marcadores','Notas','Escuchar','Pausa','Cita','Compartir','Cerrar','Mostrar en PDF','Mostrar original','Página anterior','Página siguiente','Traducción no disponible'],
+  pt:['Traduzir','Original','A traduzir','Traduzir este documento para português?','Traduzir','Agora não','Página','Ferramentas','Pesquisar','Ajustar','Página única','Contínuo','Tradução','Miniaturas','Índice','Resultados','Marcadores','Notas','Ouvir','Pausa','Citação','Partilhar','Fechar','Mostrar no PDF','Mostrar original','Página anterior','Página seguinte','Tradução indisponível']
+ };
+ const t=(index)=>labels[uiLang][index];
  const content=el('div','ires-pdf-viewer');root.append(content);
+ root.setAttribute('lang',uiLang);
  const status=el('div','ires-pdf-status','Caricamento documento…');content.append(status);
  const toolbar=el('div','ires-pdf-controls');
  const previous=el('button','','‹');previous.type='button';previous.setAttribute('aria-label','Pagina precedente');
@@ -65,6 +78,13 @@ async function render(url,title,root,token,citation=''){
  fit.textContent='Adatta';share.textContent='Condividi';share.title='Copia collegamento alla pagina';
  search.placeholder='Cerca nel PDF';find.textContent='Trova';
 
+ // Offer document translation to non-Italian visitors, without auto-sending PDF text.
+ const translationOffer=el('div','ires-pdf-translation-offer');
+ const offerText=el('span','',t(3));
+ const offerAccept=el('button','',t(4));offerAccept.type='button';
+ const offerDismiss=el('button','',t(5));offerDismiss.type='button';
+ translationOffer.append(offerText,offerAccept,offerDismiss);
+ translationOffer.hidden=browserLang==='it'||!supported.includes(browserLang);
  const workspace=el('div','ires-pdf-workspace');
  const sidebarBackdrop=el('button','ires-pdf-sidebar-backdrop');sidebarBackdrop.type='button';sidebarBackdrop.setAttribute('aria-label','Chiudi pannello laterale');sidebarBackdrop.hidden=true;
  const sidebar=el('aside','ires-pdf-sidebar');sidebar.setAttribute('aria-label','Navigazione documento');sidebar.hidden=true;
@@ -94,7 +114,18 @@ async function render(url,title,root,token,citation=''){
  workspace.append(sidebarBackdrop,sidebar,viewport);
  const controlsShell=el('div','ires-pdf-controls-shell');
  controlsShell.append(toolbar,extraTools);
- content.append(controlsShell,workspace);
+ content.append(translationOffer,controlsShell,workspace);
+ const localizedControls=[
+  [toolsToggle,7],[fit,9],[find,8],[thumbsTab,13],[outlineTab,14],
+  [resultsTab,15],[bookmarksTab,16],[notesTab,17],[translationTab,12],
+  [speech,18],[speechPause,19],[cite,20],[share,21],[translationClose,22],
+  [prevMatch,25],[nextMatch,26]
+ ];
+ localizedControls.forEach(([node,index])=>{if(node===prevMatch||node===nextMatch){node.title=t(index);node.setAttribute('aria-label',t(index));}else node.textContent=t(index);});
+ search.placeholder=t(8);translate.textContent=t(0);
+ language.value=supported.includes(browserLang)?browserLang:'en';
+ offerAccept.onclick=()=>{translationOffer.hidden=true;setTranslationMode(true);};
+ offerDismiss.onclick=()=>{translationOffer.hidden=true;};
  const isNarrow=()=>window.matchMedia('(max-width:720px)').matches;
  function setSidebar(open){
   sidebar.hidden=!open;sidebarBackdrop.hidden=!open||!isNarrow();
@@ -282,7 +313,7 @@ async function render(url,title,root,token,citation=''){
   mode.onclick=()=>{
    continuous=!continuous;modeEpoch++;
    mode.setAttribute('aria-pressed',String(continuous));
-   mode.textContent=continuous?'Singola':'Continuo';mode.title=continuous?'Passa alla pagina singola':'Passa allo scorrimento continuo';
+   mode.textContent=continuous?t(10):t(11);mode.title=continuous?'Passa alla pagina singola':'Passa allo scorrimento continuo';
    singlePage.hidden=continuous;stack.hidden=!continuous;
    viewport.classList.toggle('ires-pdf-touch-continuous',continuous);
    if(continuous)setupContinuous().catch(fail);else{stack.replaceChildren();slots=[];schedule();}
@@ -521,7 +552,7 @@ async function render(url,title,root,token,citation=''){
    if(!translationMode||token!==session)return;
    const number=visiblePageForTranslation();
    translationActivePage=number;
-   if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent='Pagina '+number+' tradotta';}
+   if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent=t(6)+' '+number;}
    if(!translationCache.has(language.value+':'+number))translationPending.add(number);
    if(!translationWorker)processTranslationQueue();
   }
@@ -571,11 +602,11 @@ async function render(url,title,root,token,citation=''){
   function setTranslationMode(enabled){
    translationMode=enabled;translationGeneration++;
    translationPending.clear();
-   translate.textContent=enabled?'Originale':'Traduci';
+   translate.textContent=enabled?t(1):t(0);
    translate.setAttribute('aria-pressed',String(enabled));
-   overlayToggle.textContent=enabled?'Mostra originale':'Mostra sul PDF';
+   overlayToggle.textContent=enabled?t(24):t(23);
    overlayToggle.setAttribute('aria-pressed',String(enabled));
-   if(!enabled){clearOverlays();translationStatus.textContent='Traduzione disattivata';}
+   if(!enabled){clearOverlays();clearTranslationLoading();translationStatus.textContent=t(1);}
    else {queueVisibleTranslation();}
   }
   translate.onclick=()=>setTranslationMode(!translationMode);
