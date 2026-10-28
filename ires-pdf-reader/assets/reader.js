@@ -463,30 +463,34 @@ async function render(url,title,root,token,citation=''){
   }
   // Browser-local neural translation: OPUS-MT / ONNX Runtime Web.
   // The model is downloaded once per language pair and cached by the browser.
-  const localModels={'it-en':'Xenova/opus-mt-it-en','en-it':'Xenova/opus-mt-en-it'};
-  const localPipelines=new Map();
-  let localPipelineFactory=null;
+  const localModels={'it-en':true,'en-it':true};
+  let localWorker=null,localRequestId=0;
+  const localRequests=new Map();
+  function getLocalWorker(){
+   if(localWorker)return localWorker;
+   if(!window.Worker||!config.translationWorkerUrl)throw Error('Web Worker non disponibile');
+   localWorker=new Worker(config.translationWorkerUrl,{type:'module'});
+   localWorker.onmessage=event=>{
+    const {id,translation,error}=event.data||{},pending=localRequests.get(id);
+    if(!pending)return;
+    localRequests.delete(id);
+    if(error)pending.reject(Error(error));else pending.resolve(translation);
+   };
+   localWorker.onerror=event=>{
+    for(const pending of localRequests.values())pending.reject(Error('Motore locale non disponibile'));
+    localRequests.clear();localWorker.terminate();localWorker=null;
+    console.warn('Errore motore traduzione Web Worker',event.message);
+   };
+   return localWorker;
+  }
   async function localTranslate(text,target){
-   const sourceLanguage='it'; // IRES publications are primarily in Italian.
-   if(sourceLanguage===target)return text;
-   const pair=sourceLanguage+'-'+target,model=localModels[pair];
-   if(!model)throw Error('Modello locale non disponibile per '+pair);
-   if(!globalThis.WebAssembly)throw Error('WebAssembly non disponibile');
-   if(!localPipelineFactory){
-    const lib=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-    lib.env.allowLocalModels=false;
-    lib.env.useBrowserCache=true;
-    localPipelineFactory=lib.pipeline;
-   }
-   if(!localPipelines.has(pair)){
-    const pending=localPipelineFactory('translation',model);
-    localPipelines.set(pair,pending);
-   }
-   let pipeline;
-   try{pipeline=await localPipelines.get(pair);}catch(error){localPipelines.delete(pair);throw error;}
-   const output=await pipeline(text,{max_new_tokens:512});
-   if(!output||!output[0]||typeof output[0].translation_text!=='string')throw Error('Risposta locale non valida');
-   return output[0].translation_text;
+   if(target==='it')return text;
+   if(!localModels['it-'+target])throw Error('Modello locale non disponibile');
+   const worker=getLocalWorker(),id=++localRequestId;
+   return new Promise((resolve,reject)=>{
+    localRequests.set(id,{resolve,reject});
+    worker.postMessage({id,text,target});
+   });
   }
   async function translateText(text,target){
    if(target==='it')return text;
@@ -609,14 +613,10 @@ async function render(url,title,root,token,citation=''){
    const number=visiblePageForTranslation();
    translationActivePage=number;
    if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent=t(6)+' '+number;}
-   const visibleNumbers=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
-    const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
-    return rect.bottom>v.top&&rect.top<v.bottom;
-   }).map(({n})=>n):[number];
-   for(const n of [number,...visibleNumbers]){
-    const key=language.value+':'+n,failed=translationFailures.get(key);
-    if(!translationCache.has(key)&&(!failed||Date.now()>=failed.until))translationPending.add(n);
-   }
+   // Strictly one active page: never queue adjacent or previously visible pages.
+   translationPending.clear();
+   const key=language.value+':'+number,failed=translationFailures.get(key);
+   if(!translationCache.has(key)&&(!failed||Date.now()>=failed.until))translationPending.add(number);
    showTranslationLoading();
    if(!translationWorker)processTranslationQueue();
   }
