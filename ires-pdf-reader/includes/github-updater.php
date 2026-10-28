@@ -76,7 +76,10 @@ final class IRES_PDF_GitHub_Updater {
  static function release() {
   $cached = get_transient(self::CACHE);
   if ($cached !== false) return $cached;
-  $response = wp_remote_get('https://api.github.com/repos/'.self::REPO.'/releases/latest', ['timeout'=>8,'headers'=>['Accept'=>'application/vnd.github+json','User-Agent'=>'IRES-PDF-Reader-WordPress']]);
+  $token=defined('IRES_GITHUB_UPDATES_TOKEN') ? trim((string)IRES_GITHUB_UPDATES_TOKEN) : trim((string)get_option('ires_github_updates_token',''));
+  $headers=['Accept'=>'application/vnd.github+json','User-Agent'=>'IRES-PDF-Reader-WordPress','X-GitHub-Api-Version'=>'2022-11-28'];
+  if($token!=='') $headers['Authorization']='Bearer '.$token;
+  $response = wp_remote_get('https://api.github.com/repos/'.self::REPO.'/releases/latest', ['timeout'=>20,'headers'=>$headers]);
   $release = null;
   if (!is_wp_error($response) && wp_remote_retrieve_response_code($response)===200) {
    $data=json_decode(wp_remote_retrieve_body($response),true);
