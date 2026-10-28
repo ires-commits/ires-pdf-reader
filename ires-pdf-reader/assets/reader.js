@@ -589,6 +589,15 @@ async function render(url,title,root,token,citation=''){
    }
    return output.join('\\n\\n');
   }
+  function isComplexTranslationPage(blocks){
+   if(!blocks||!blocks.length)return false;
+   const dotted=blocks.filter(b=>/\.{5,}|…{3,}|_{5,}/.test(b.original)).length;
+   const narrow=blocks.filter(b=>b.width<150&&b.original.length>70).length;
+   return dotted>=2||narrow>=3;
+  }
+  function cleanTranslatedText(value){
+   return String(value||'').replace(/\\\\n/g,' ').replace(/\s*\.{5,}\s*/g,' · ').replace(/\s+/g,' ').trim();
+  }
   function extractLayoutBlocks(items,viewport){
    const lines=[];
    for(const item of items){
@@ -628,7 +637,7 @@ async function render(url,title,root,token,citation=''){
    const article=el('article','ires-pdf-reading-article');
    if(entry&&Array.isArray(entry.blocks)){
     entry.blocks.forEach((block,i)=>{
-     const value=String(block.translation||'').split('\\n').join(' ').trim();
+     const value=cleanTranslatedText(block.translation);
      if(!value)return;
      const isHeading=value.length<125&&block.original.length<125&&i<5;
      article.append(el(isHeading?'h3':'p','',value));
@@ -679,12 +688,20 @@ async function render(url,title,root,token,citation=''){
    for(const number of targetPages){
     const entry=translationCache.get(language.value+':'+number);
     if(!entry)continue;
+    if(isComplexTranslationPage(entry.blocks)){
+     if(!readingMode&&number===visiblePageForTranslation()){
+      setReadingMode(true);
+      return;
+     }
+     continue;
+    }
     const holder=continuous?slots[number-1]:singlePage;
     if(!holder||!holder.querySelector('canvas'))continue;
     for(const block of entry.blocks){
-     const node=el('div','ires-pdf-translation-overlay',block.translation);
+     const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
+     node.style.overflow='hidden';
      node.style.fontSize=Math.max(9,Math.min(15,block.fontSize*scale))+'px';
      node.title=block.original;holder.append(node);
     }
