@@ -530,7 +530,7 @@ async function render(url,title,root,token,citation=''){
    for(const {holder,number} of pages){
     const key=language.value+':'+number;
     if(translationCache.has(key))continue;
-    const loading=el('div','ires-pdf-translation-loading',translationFailures.has(key)?t(27):t(2)+'…');
+    const loading=el('div','ires-pdf-translation-loading',translationFailures.has(key)?labels[language.value][27]:labels[language.value][2]+'…');
     loading.setAttribute('role','status');holder.append(loading);
    }
   }
