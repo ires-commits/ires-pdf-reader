@@ -626,6 +626,7 @@ async function render(url,title,root,token,citation=''){
       const delay=permanent?300000:Math.min(120000,Math.pow(2,Math.min(attempts,5))*2500);
       translationFailures.set(key,{attempts,until:Date.now()+delay,message});
       showTranslationLoading();
+      setTimeout(()=>{if(translationMode&&generation===translationGeneration&&token===session)queueVisibleTranslation();},delay+100);
       // Temporary errors are eligible for retry on the next viewport update.
      }
     }
