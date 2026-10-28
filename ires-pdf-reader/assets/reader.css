@@ -289,3 +289,10 @@
 .ires-pdf-reading-wait{color:#6b7c87!important;font-style:italic!important}
 .ires-pdf-reading-toggle[aria-pressed=true]{background:#dff1f0!important;border-color:#98d2ce!important;color:#125d65!important}
 @media(max-width:720px){.ires-pdf-reading-view{padding:10px}.ires-pdf-reading-header{border-radius:12px 12px 0 0}.ires-pdf-reading-article{border-radius:0 0 12px 12px}.ires-pdf-translation-overlay{line-height:1.25!important}}
+
+
+/* v2.13.3: readable, aligned table-of-contents entries in translated reading mode */
+.ires-pdf-reading-index-line{display:flex;align-items:baseline;gap:16px;padding:10px 0;border-bottom:1px dotted #d8e2e8;font:450 clamp(15px,1.45vw,18px)/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:#274456}
+.ires-pdf-reading-index-line:last-child{border-bottom:0}
+.ires-pdf-reading-index-label{flex:1;min-width:0;overflow-wrap:anywhere}
+.ires-pdf-reading-index-number{flex:none;font-variant-numeric:tabular-nums;color:#16808b;font-weight:650}
