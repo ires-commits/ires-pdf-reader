@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.11.1
+- Risolto il blocco dell'interfaccia durante la traduzione neurale: download, inizializzazione e inferenza del modello vengono eseguiti in un Web Worker separato dal thread del lettore PDF.
+- La coda traduce esclusivamente la pagina attualmente al centro dell'area visibile, senza precaricare pagine adiacenti; interrompe l'elaborazione dei blocchi successivi se cambia pagina.
+- Mantiene la cache delle pagine già tradotte e l'opzione di fallback remoto.
+- Nota: il primo download del modello può essere lungo; la compatibilità con Safari/iOS resta da collaudare su dispositivo.
+
+
 ## 2.11.0
 - Primo motore neurale locale OPUS-MT per la traduzione italiano → inglese negli overlay del PDF Reader, via Transformers.js e ONNX Runtime Web (WebAssembly).
 - Traduzione senza chiave API né quota di caratteri per questa coppia linguistica; download iniziale di librerie e modello da CDN/Hugging Face, con cache browser.
