@@ -1,38 +1,47 @@
 <!doctype html>
 <html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IRES PDF Reader - prova traduzione locale</title>
-<style>body{font:16px system-ui;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.5}textarea{width:100%;box-sizing:border-box;min-height:120px;padding:12px}button,select{padding:10px;margin:8px 6px 8px 0}output{display:block;white-space:pre-wrap;border:1px solid #ddd;padding:16px;min-height:80px}small{color:#555}</style>
-<h1>Prototipo: traduzione nel browser</h1>
-<p>Test sperimentale delle API di traduzione locale del browser. Non utilizza servizi remoti per inviare il testo. Il browser può scaricare un modello linguistico alla prima esecuzione.</p>
-<label>Testo da tradurre<textarea id="source">La ricerca scientifica sostiene le decisioni pubbliche e aiuta a comprendere le trasformazioni del territorio.</textarea></label>
-<label>Lingua di partenza <select id="from"><option value="it">Italiano</option><option value="en">English</option></select></label>
-<label>Lingua di arrivo <select id="to"><option value="en">English</option><option value="it">Italiano</option></select></label>
-<button id="run">Prova traduzione locale</button>
-<p id="status" role="status">Verifica delle capacità del browser in corso…</p>
-<output id="result"></output>
-<small>Questo test usa la Translator API sperimentale del browser, non ancora Bergamot incorporato. Nessun testo viene trasmesso da questa pagina a un servizio di traduzione. La disponibilità dipende dal browser e dal sistema operativo.</small>
-<script>
-'use strict';
-const status=document.getElementById('status'),result=document.getElementById('result'),run=document.getElementById('run');
-const api=globalThis.Translator;
-status.textContent=api&&typeof api.create==='function'?'Translator API disponibile: prova una traduzione.':'Translator API non disponibile in questo browser. Per la copertura universale occorrerà integrare un runtime WebAssembly e modelli locali.';
+<title>IRES - Traduzione neurale locale WebAssembly</title>
+<style>body{font:16px system-ui;max-width:760px;margin:36px auto;padding:0 18px;line-height:1.5}textarea{width:100%;box-sizing:border-box;min-height:120px;padding:12px;font:inherit}button,select{padding:10px;margin:8px 6px 8px 0}output{display:block;white-space:pre-wrap;border:1px solid #ccc;border-radius:8px;padding:16px;min-height:75px}small{color:#555}button:disabled{opacity:.5}</style>
+<h1>IRES PDF Reader: traduzione locale WebAssembly</h1>
+<p>Esperimento isolato: modelli neurali OPUS-MT eseguiti nel browser con Transformers.js e ONNX Runtime Web. Non richiede Python, Docker o API di traduzione.</p>
+<label>Testo<textarea id="source">La ricerca scientifica sostiene le decisioni pubbliche e aiuta a comprendere le trasformazioni del territorio.</textarea></label>
+<label>Direzione <select id="direction"><option value="it-en">Italiano → English</option><option value="en-it">English → Italiano</option></select></label>
+<button id="run">Traduci sul dispositivo</button><button id="clear" type="button">Cancella risultato</button>
+<p id="status" role="status">Pronto. Al primo avvio verranno scaricati i modelli necessari.</p>
+<output id="result" aria-live="polite"></output>
+<p><small>Privacy: il testo da tradurre viene elaborato sul dispositivo. Il primo utilizzo richiede una connessione per scaricare codice e modelli da CDN e Hugging Face. Le risorse possono essere conservate nella cache del browser. Il caricamento da servizi esterni può rivelare indirizzo IP e metadati tecnici; per la produzione IRES è preferibile ospitare codice e modelli sul proprio dominio.</small></p>
+<script type="module">
+const status=document.getElementById('status'),result=document.getElementById('result'),run=document.getElementById('run'),clear=document.getElementById('clear');
+const modelIds={'it-en':'Xenova/opus-mt-it-en','en-it':'Xenova/opus-mt-en-it'};
+const loaded=new Map();let pipelineFactory;
+const show=(message)=>{status.textContent=message;};
+clear.onclick=()=>{result.textContent='';show('Risultato cancellato.');};
 run.onclick=async()=>{
- const sourceLanguage=document.getElementById('from').value,targetLanguage=document.getElementById('to').value;
- if(sourceLanguage===targetLanguage){status.textContent='Seleziona due lingue diverse.';return;}
- if(!globalThis.Translator||typeof globalThis.Translator.create!=='function'){status.textContent='API locale non supportata: nessun servizio esterno verrà utilizzato.';return;}
- run.disabled=true;result.textContent='';let translator;
+ run.disabled=true;result.textContent='';
  try{
-  status.textContent='Verifica disponibilità modello…';
-  if(typeof globalThis.Translator.availability==='function'){
-   const availability=await globalThis.Translator.availability({sourceLanguage,targetLanguage});
-   if(availability==='unavailable')throw Error('Modello linguistico non disponibile su questo browser.');
+  if(!globalThis.WebAssembly)throw Error('WebAssembly non supportato da questo browser.');
+  const direction=document.getElementById('direction').value,model=modelIds[direction];
+  if(!pipelineFactory){
+   show('Caricamento del motore WebAssembly…');
+   const lib=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+   pipelineFactory=lib.pipeline;
+   lib.env.allowLocalModels=false;
+   lib.env.useBrowserCache=true;
   }
-  status.textContent='Preparazione del modello locale…';
-  translator=await globalThis.Translator.create({sourceLanguage,targetLanguage});
-  status.textContent='Traduzione in corso…';
-  result.textContent=await translator.translate(document.getElementById('source').value);
-  status.textContent='Traduzione completata localmente.';
- }catch(e){status.textContent='Impossibile tradurre: '+(e&&e.message||String(e));}
- finally{if(translator&&typeof translator.destroy==='function')translator.destroy();run.disabled=false;}
+  if(!loaded.has(direction)){
+   show('Scaricamento e preparazione del modello '+model+' (prima esecuzione più lenta)…');
+   const task=pipelineFactory('translation',model,{progress_callback:p=>{
+    if(p&&p.status==='progress'&&Number.isFinite(p.progress))show('Download modello: '+Math.round(p.progress)+'%');
+    else if(p&&p.status==='initiate')show('Preparazione: '+(p.file||'modello'));
+   }});
+   loaded.set(direction,task);
+  }
+  const translator=await loaded.get(direction);
+  show('Traduzione locale in corso…');
+  const translated=await translator(document.getElementById('source').value,{max_new_tokens:512});
+  result.textContent=translated?.[0]?.translation_text||'Nessun testo restituito.';
+  show('Traduzione locale completata.');
+ }catch(e){show('Errore: '+(e?.message||String(e)));loaded.clear();}
+ finally{run.disabled=false;}
 };
 </script></html>
