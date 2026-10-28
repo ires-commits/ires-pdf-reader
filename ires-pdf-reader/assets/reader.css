@@ -296,3 +296,13 @@
 .ires-pdf-reading-index-line:last-child{border-bottom:0}
 .ires-pdf-reading-index-label{flex:1;min-width:0;overflow-wrap:anywhere}
 .ires-pdf-reading-index-number{flex:none;font-variant-numeric:tabular-nums;color:#16808b;font-weight:650}
+
+
+/* v2.13.4 — explicit, localized reading mode explanation */
+.ires-pdf-reading-header .ires-pdf-reading-note{max-width:60ch;font:400 14px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif;color:#526d7c;margin:0 0 12px}
+.ires-pdf-reading-notice{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:24px 0 4px;padding:18px 20px;border:1px solid #c5e4e4;border-radius:14px;background:linear-gradient(125deg,#eaf8f6,#f2f9fc);color:#234858}
+.ires-pdf-reading-notice-copy{flex:1;min-width:0}
+.ires-pdf-reading-notice strong{display:block;font:650 15px/1.4 system-ui,sans-serif;color:#135e6c}
+.ires-pdf-reading-notice p{font:400 13px/1.6 system-ui,sans-serif;color:#3c6170;margin:6px 0 0}
+.ires-pdf-reading-dismiss{flex:none;border:1px solid #b7dcda;background:#fff;color:#176c75;border-radius:9px;padding:8px 12px;font:650 12px system-ui,sans-serif;cursor:pointer}
+@media(max-width:600px){.ires-pdf-reading-notice{flex-direction:column;padding:15px}.ires-pdf-reading-dismiss{align-self:flex-start}}
