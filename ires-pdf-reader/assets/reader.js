@@ -522,7 +522,7 @@ async function render(url,title,root,token,citation=''){
    const number=visiblePageForTranslation();
    translationActivePage=number;
    if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent='Pagina '+number+' tradotta';}
-   if(!translationPending.has(number))translationPending.add(number);
+   if(!translationCache.has(language.value+':'+number))translationPending.add(number);
    if(!translationWorker)processTranslationQueue();
   }
   async function processTranslationQueue(){
@@ -565,7 +565,7 @@ async function render(url,title,root,token,citation=''){
     }
    }finally{
     translationWorker=false;
-    if(translationMode&&translationPending.size&&generation===translationGeneration)processTranslationQueue();
+    if(translationMode&&translationPending.size&&token===session)processTranslationQueue();
    }
   }
   function setTranslationMode(enabled){
