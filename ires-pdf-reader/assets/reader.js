@@ -665,7 +665,8 @@ async function render(url,title,root,token,citation=''){
    try{
     while(translationMode&&generation===translationGeneration&&token===session&&translationPending.size){
      const visible=visiblePageForTranslation();
-     let number=translationPending.has(visible)?visible:translationPending.values().next().value;
+     let number=translationPending.has(visible)?visible:null;
+     if(number===null){translationPending.clear();break;}
      translationPending.delete(number);
      const key=target+':'+number;
      if(translationCache.has(key)){showOverlays();continue;}
@@ -690,7 +691,7 @@ async function render(url,title,root,token,citation=''){
       }
       const translated=[];
       for(let i=0;i<layout.length;i++){
-       if(!translationMode||generation!==translationGeneration||token!==session)break;
+       if(!translationMode||generation!==translationGeneration||token!==session||number!==visiblePageForTranslation())break;
        translationStatus.textContent='Pagina '+number+': '+(i+1)+' / '+layout.length+' blocchi';
        const translation=await translateLong(layout[i].original,target,generation);
        translated.push({...layout[i],translation});
@@ -698,7 +699,9 @@ async function render(url,title,root,token,citation=''){
        if(number===visiblePageForTranslation())showTranslationLoading();
       }
       if(!translationMode||generation!==translationGeneration||token!==session)break;
-      translationCache.set(key,{blocks:translated,original:items.map(item=>item.str).join(' '),translation:translated.map(block=>block.translation).join('\\n\\n')});
+      if(number!==visiblePageForTranslation()||translated.length!==layout.length)continue;
+      translationCache.set(key,{blocks:translated,original,translation:translated.map(block=>block.translation).join('\\n\\n')});
+      await storedTranslation(storageKey,translationCache.get(key));
       if(number===visiblePageForTranslation()){
        translatedText=translationCache.get(key).translation;
        translationSource.textContent=translationCache.get(key).original;
