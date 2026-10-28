@@ -223,3 +223,35 @@
 .ires-pdf-translation-loading.ires-pdf-translation-error{pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:7px;max-width:min(90%,440px);white-space:normal;text-align:center;border-radius:13px}
 .ires-pdf-translation-error-detail{font-size:11px;font-weight:400;overflow-wrap:anywhere;line-height:1.35}
 .ires-pdf-translation-retry{border:1px solid #b9e1e1;background:#fff;color:#0a5362;border-radius:8px;padding:6px 12px;font-weight:650;cursor:pointer}
+
+
+/* v2.13.0 — Glass translation layer: restrained blur, local font stack, clear text. */
+.ires-pdf-overlay .ires-pdf-translation-overlay,
+.ires-pdf-dedicated-root .ires-pdf-translation-overlay,
+.ires-pdf-translation-overlay{
+ background:rgba(248,252,255,.91);
+ -webkit-backdrop-filter:blur(5px) saturate(115%);
+ backdrop-filter:blur(5px) saturate(115%);
+ border:1px solid rgba(255,255,255,.82);
+ border-radius:5px;
+ box-shadow:0 1px 5px rgba(19,45,67,.11),inset 0 1px rgba(255,255,255,.58);
+ color:#193246;
+ font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+ font-weight:450;
+ letter-spacing:-.012em;
+ line-height:1.32;
+ padding:2px 4px;
+ overflow:auto;
+ overflow-wrap:anywhere;
+ scrollbar-width:thin;
+ scrollbar-color:rgba(40,88,110,.25) transparent;
+}
+@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+ .ires-pdf-translation-overlay{background:rgba(249,252,255,.985)}
+}
+@media(max-width:720px){
+ .ires-pdf-translation-overlay{border-radius:3px;padding:1px 3px;line-height:1.25}
+}
+@media(prefers-reduced-transparency:reduce){
+ .ires-pdf-translation-overlay{background:#f9fcff;-webkit-backdrop-filter:none;backdrop-filter:none}
+}
