@@ -476,10 +476,10 @@ async function render(url,title,root,token,citation=''){
      try{return await translator.translate(text);}finally{if(translator.destroy)translator.destroy();}
     }catch(error){console.info('Traduzione locale non disponibile',error);}
    }
-   if(!config.translationRemote||!config.translationApi)throw Error('Configura il motore di traduzione nelle impostazioni di IRES PDF Reader.');
+   if(!config.translationRemote||!config.translationApi)throw Error('Motore di traduzione non configurato nelle impostazioni di IRES PDF Reader.');
    const response=await fetch(config.translationApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:'auto',target})});
    const data=await response.json().catch(()=>({}));
-   if(!response.ok)throw Error(data.message||'Servizio di traduzione non disponibile');
+   if(!response.ok)throw Error((data.message||'Servizio di traduzione non disponibile')+' (HTTP '+response.status+')');
    if(typeof data.translatedText!=='string')throw Error('Risposta del servizio non valida');
    return data.translatedText;
   }
@@ -532,7 +532,16 @@ async function render(url,title,root,token,citation=''){
     if(translationCache.has(key))continue;
     const failure=translationFailures.get(key);
     const loading=el('div','ires-pdf-translation-loading',failure&&Date.now()<failure.until?labels[language.value][27]:labels[language.value][2]+'…');
-    loading.setAttribute('role','status');holder.append(loading);
+    loading.setAttribute('role','status');
+    if(failure){
+     loading.classList.add('ires-pdf-translation-error');
+     const detail=el('span','ires-pdf-translation-error-detail',failure.message||labels[language.value][27]);
+     const retry=el('button','ires-pdf-translation-retry',uiLang==='it'?'Riprova':uiLang==='fr'?'Réessayer':uiLang==='de'?'Erneut versuchen':uiLang==='es'?'Reintentar':uiLang==='pt'?'Tentar novamente':'Retry');
+     retry.type='button';
+     retry.onclick=()=>{translationFailures.delete(key);translationPending.add(number);showTranslationLoading();if(!translationWorker)processTranslationQueue();};
+     loading.append(detail,retry);
+    }
+    holder.append(loading);
    }
   }
   function showOverlays(){
