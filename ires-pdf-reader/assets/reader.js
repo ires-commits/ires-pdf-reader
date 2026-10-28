@@ -711,7 +711,7 @@ async function render(url,title,root,token,citation=''){
     retry.onclick=()=>{translationFailures.delete(key);queueVisibleTranslation();};
     loading.append(detail,retry);
    }
-   workspace.append(loading);
+   root.append(loading);
   }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
