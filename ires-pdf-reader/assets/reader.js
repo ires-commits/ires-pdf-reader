@@ -504,6 +504,12 @@ async function render(url,title,root,token,citation=''){
   // The model is downloaded once per language pair and cached by the browser.
   const localModels={'it-en':true,'en-it':true};
   let localWorker=null,localRequestId=0;
+  const LOCAL_TRANSLATION_TIMEOUT=45000;
+  function resetLocalWorker(reason){
+   if(localWorker){localWorker.terminate();localWorker=null;}
+   for(const pending of localRequests.values()){clearTimeout(pending.timer);pending.reject(Error(reason));}
+   localRequests.clear();
+  }
   const localRequests=new Map();
   function getLocalWorker(){
    if(localWorker)return localWorker;
@@ -513,11 +519,11 @@ async function render(url,title,root,token,citation=''){
     const {id,translation,error}=event.data||{},pending=localRequests.get(id);
     if(!pending)return;
     localRequests.delete(id);
+    clearTimeout(pending.timer);
     if(error)pending.reject(Error(error));else pending.resolve(translation);
    };
    localWorker.onerror=event=>{
-    for(const pending of localRequests.values())pending.reject(Error('Motore locale non disponibile'));
-    localRequests.clear();localWorker.terminate();localWorker=null;
+    resetLocalWorker('Motore locale non disponibile');
     console.warn('Errore motore traduzione Web Worker',event.message);
    };
    return localWorker;
@@ -527,7 +533,8 @@ async function render(url,title,root,token,citation=''){
    if(!localModels['it-'+target])throw Error('Modello locale non disponibile');
    const worker=getLocalWorker(),id=++localRequestId;
    return new Promise((resolve,reject)=>{
-    localRequests.set(id,{resolve,reject});
+    const timer=setTimeout(()=>resetLocalWorker('Tempo massimo di traduzione superato: il motore è stato riavviato'),LOCAL_TRANSLATION_TIMEOUT);
+    localRequests.set(id,{resolve,reject,timer});
     worker.postMessage({id,text,target});
    });
   }
@@ -554,7 +561,7 @@ async function render(url,title,root,token,citation=''){
    return data.translatedText;
   }
   async function translateLong(text,target,generation){
-   const chunks=splitTranslation(text),output=[];
+   const chunks=splitTranslation(text,1200),output=[];
    for(const chunk of chunks){
     if(generation!==translationGeneration||token!==session||!translationMode)throw Error('Traduzione interrotta');
     output.push(await translateText(chunk,target));
@@ -686,6 +693,12 @@ async function render(url,title,root,token,citation=''){
        translationCache.set(key,previous);
        translationProgress.set(key,100);
        translationBusyPage=0;
+       if(number===visiblePageForTranslation()){
+        translatedText=previous.translation;
+        translationSource.textContent=previous.original;
+        translationResult.textContent=previous.translation;
+        translationStatus.textContent='Pagina '+number+' caricata dalla cache';
+       }
        showOverlays();
        continue;
       }
