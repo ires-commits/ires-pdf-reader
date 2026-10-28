@@ -34,7 +34,7 @@ final class IRES_PDF_Translation {
   $ip=isset($_SERVER['REMOTE_ADDR'])?(string)$_SERVER['REMOTE_ADDR']:'';
   $key='ires_pdf_translate_rate_'.hash_hmac('sha256',$ip,wp_salt('auth'));
   $count=(int)get_transient($key);
-  if($count>=40)return new WP_Error('ires_translation_limit','Limite orario raggiunto',['status'=>429]);
+  if($count>=160)return new WP_Error('ires_translation_limit','Limite orario raggiunto',['status'=>429]);
   set_transient($key,$count+1,HOUR_IN_SECONDS);
   if($provider==='deepl'){
    $payload=['text'=>[$text],'target_lang'=>strtoupper($target)];
