@@ -19,9 +19,15 @@ function ires_shared_updates_state($refresh=false) {
         'pdf'=>['name'=>'IRES PDF Reader','file'=>$pdf,'installed'=>$plugins[$pdf]['Version']??null,'release'=>is_array($pdf_release)?$pdf_release:null],
     ];
 }
+function ires_shared_updates_origin() {
+    // Never accept an arbitrary redirect URL from a request.
+    $page=isset($_GET['page'])?sanitize_key(wp_unslash($_GET['page'])):'';
+    return $page==='ires-pdf-reader'?'pdf':'ps';
+}
 function ires_shared_updates_panel() {
     if (!current_user_can('update_plugins')) return;
     $state=ires_shared_updates_state();
+    $origin=ires_shared_updates_origin();
     echo '<hr><h2>Aggiornamenti IRES — pannello condiviso</h2>';
     echo '<p>Le due estensioni mantengono aggiornamenti indipendenti. Le novità sono tratte dalle note della release GitHub.</p>';
     if (isset($_GET['ires_shared_status'])) {
@@ -48,18 +54,21 @@ function ires_shared_updates_panel() {
     }
     echo '</tbody></table>';
     echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="margin-top:14px;display:inline-block;margin-right:8px"><input type="hidden" name="action" value="ires_shared_updates_check">';
+    echo '<input type="hidden" name="ires_shared_origin" value="'.esc_attr($origin).'">';
     wp_nonce_field('ires_shared_updates_check');
     submit_button('Verifica entrambi','secondary','submit',false);
     echo '</form>';
     if($available===2) {
         echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="display:inline-block"><input type="hidden" name="action" value="ires_shared_updates_install">';
+        echo '<input type="hidden" name="ires_shared_origin" value="'.esc_attr($origin).'">';
         wp_nonce_field('ires_shared_updates_install');
         submit_button('Aggiorna entrambi','primary','submit',false);
         echo '</form>';
     }
 }
 function ires_shared_updates_redirect($status) {
-    $url=function_exists('ires_ps_gh_admin_page')?admin_url('edit.php?post_type=pubblicazione&page=ires-ps-github-updates'):admin_url('options-general.php?page=ires-pdf-reader');
+    $origin=isset($_POST['ires_shared_origin'])?sanitize_key(wp_unslash($_POST['ires_shared_origin'])):'';
+    $url=$origin==='pdf'?admin_url('options-general.php?page=ires-pdf-reader'):admin_url('edit.php?post_type=pubblicazione&page=ires-ps-github-updates');
     wp_safe_redirect(add_query_arg('ires_shared_status',$status,$url));exit;
 }
 add_action('admin_post_ires_shared_updates_check',function(){
