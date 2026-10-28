@@ -28,7 +28,7 @@ function ires_shared_updates_panel() {
     if (!current_user_can('update_plugins')) return;
     $state=ires_shared_updates_state();
     $origin=ires_shared_updates_origin();
-    echo '<hr><h2>Aggiornamenti IRES — pannello condiviso</h2>';
+    echo '<h2>Aggiornamenti dei plugin IRES</h2>';
     echo '<p>Le due estensioni mantengono aggiornamenti indipendenti. Le novità sono tratte dalle note della release GitHub.</p>';
     if (isset($_GET['ires_shared_status'])) {
         $status=sanitize_key(wp_unslash($_GET['ires_shared_status']));
@@ -43,18 +43,18 @@ function ires_shared_updates_panel() {
         if($has) $available++;
         echo '<tr><td><strong>'.esc_html($item['name']).'</strong></td><td>'.esc_html($item['installed']??'Non installato').'</td><td>'.esc_html($latest??'Non disponibile').'</td><td>';
         if($has) {
-            $action=$id==='ps'?'ires_ps_gh_install':'ires_pdf_install_update';
             echo '<form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="display:inline-block;margin:0">';
-            echo '<input type="hidden" name="action" value="'.esc_attr($action).'">';
+            echo '<input type="hidden" name="action" value="ires_shared_updates_install">';
+            echo '<input type="hidden" name="ires_shared_target" value="'.esc_attr($id).'">';
             echo '<input type="hidden" name="ires_shared_origin" value="'.esc_attr($origin).'">';
-            wp_nonce_field($action);
+            wp_nonce_field('ires_shared_updates_install');
             submit_button('Aggiorna singolarmente','secondary','submit',false);
             echo '</form>';
         } else echo esc_html($item['installed']?'Nessun aggiornamento':'Plugin non installato');
         echo '</td></tr>';
         if($has) {
             $notes=trim((string)($item['release']['notes']??''));
-            echo '<tr><td colspan="4"><strong>Novità '.esc_html($item['name']).' '.esc_html($latest).'</strong><div style="white-space:pre-wrap;max-height:240px;overflow:auto;margin-top:8px">'.esc_html($notes?:'Note di rilascio non disponibili: consultare il changelog del progetto.').'</div></td></tr>';
+            echo '<tr><td colspan="4"><details><summary style="cursor:pointer"><strong>Novità '.esc_html($item['name']).' '.esc_html($latest).'</strong></summary><div style="white-space:pre-wrap;max-height:150px;overflow:auto;margin-top:8px;padding:10px;background:#f6f7f7">'.esc_html($notes?:'Note di rilascio non disponibili: consultare il changelog del progetto.').'</div></details></td></tr>';
         }
     }
     echo '</tbody></table>';
@@ -89,14 +89,25 @@ add_action('admin_post_ires_shared_updates_install',function(){
     if(get_transient('ires_shared_updates_lock'))ires_shared_updates_redirect('busy');
     set_transient('ires_shared_updates_lock',1,15*MINUTE_IN_SECONDS);
     $state=ires_shared_updates_state(true);
-    $both=true;
-    foreach($state as $item)if(!$item['installed']||empty($item['release']['version'])||!version_compare($item['release']['version'],$item['installed'],'>'))$both=false;
-    if(!$both){delete_transient('ires_shared_updates_lock');ires_shared_updates_redirect('none');}
+    $target=isset($_POST['ires_shared_target'])?sanitize_key(wp_unslash($_POST['ires_shared_target'])):'all';
+    if(!in_array($target,['all','ps','pdf'],true)) {
+        delete_transient('ires_shared_updates_lock');
+        wp_die('Plugin non valido.');
+    }
+    $selected=$target==='all'?['ps','pdf']:[$target];
+    foreach($selected as $id) {
+        $item=$state[$id];
+        if(!$item['installed']||empty($item['release']['version'])||!version_compare($item['release']['version'],$item['installed'],'>')) {
+            delete_transient('ires_shared_updates_lock');
+            ires_shared_updates_redirect('none');
+        }
+    }
     require_once ABSPATH.'wp-admin/includes/file.php';
     require_once ABSPATH.'wp-admin/includes/plugin.php';
     require_once ABSPATH.'wp-admin/includes/class-wp-upgrader.php';
     $ok=true;
     // PDF Reader uses the standard WordPress update mechanism.
+    if(in_array('pdf',$selected,true)) {
     wp_update_plugins();
     $pdf=$state['pdf'];$pdf_active=is_plugin_active($pdf['file']);
     $pdf_result=(new Plugin_Upgrader(new Automatic_Upgrader_Skin()))->upgrade($pdf['file']);
@@ -107,7 +118,9 @@ add_action('admin_post_ires_shared_updates_install',function(){
         $activated=activate_plugin($pdf['file']);
         if(is_wp_error($activated))$ok=false;
     }
+    }
     // Scientific repository uses its existing SHA-256 verified download.
+    if(in_array('ps',$selected,true)) {
     $ps=$state['ps'];
     if(!function_exists('ires_ps_gh_download_asset'))$ok=false;
     else {
@@ -131,6 +144,7 @@ add_action('admin_post_ires_shared_updates_install',function(){
             }
             @unlink($package);
         }
+    }
     }
     delete_transient('ires_ps_gh_latest_release');
     delete_transient('ires_pdf_reader_github_release');
