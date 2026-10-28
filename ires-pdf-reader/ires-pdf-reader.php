@@ -10,6 +10,7 @@
  */
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/github-updater.php';
+require_once __DIR__.'/includes/shared-updates.php';
 require_once __DIR__.'/includes/passage-store.php';
 require_once __DIR__.'/includes/translation.php';
 register_activation_hook(__FILE__,['IRES_PDF_Passage_Store','install']);
@@ -72,6 +73,7 @@ final class IRES_PDF_Reader {
    submit_button('Aggiorna ora alla versione '.esc_html($remote),'primary','submit',false);
    echo '</form>';
   }
+  ires_shared_updates_panel();
   echo '</div>';
  }
  static function valid_pdf($url) {
