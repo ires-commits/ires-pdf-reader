@@ -461,22 +461,49 @@ async function render(url,title,root,token,citation=''){
    }
    return chunks.filter(Boolean);
   }
+  // Browser-local neural translation: OPUS-MT / ONNX Runtime Web.
+  // The model is downloaded once per language pair and cached by the browser.
+  const localModels={'it-en':'Xenova/opus-mt-it-en','en-it':'Xenova/opus-mt-en-it'};
+  const localPipelines=new Map();
+  let localPipelineFactory=null;
+  async function localTranslate(text,target){
+   const sourceLanguage='it'; // IRES publications are primarily in Italian.
+   if(sourceLanguage===target)return text;
+   const pair=sourceLanguage+'-'+target,model=localModels[pair];
+   if(!model)throw Error('Modello locale non disponibile per '+pair);
+   if(!globalThis.WebAssembly)throw Error('WebAssembly non disponibile');
+   if(!localPipelineFactory){
+    const lib=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+    lib.env.allowLocalModels=false;
+    lib.env.useBrowserCache=true;
+    localPipelineFactory=lib.pipeline;
+   }
+   if(!localPipelines.has(pair)){
+    const pending=localPipelineFactory('translation',model);
+    localPipelines.set(pair,pending);
+   }
+   let pipeline;
+   try{pipeline=await localPipelines.get(pair);}catch(error){localPipelines.delete(pair);throw error;}
+   const output=await pipeline(text,{max_new_tokens:512});
+   if(!output||!output[0]||typeof output[0].translation_text!=='string')throw Error('Risposta locale non valida');
+   return output[0].translation_text;
+  }
   async function translateText(text,target){
+   if(target==='it')return text;
+   if(localModels['it-'+target]){
+    try{return await localTranslate(text,target);}
+    catch(error){
+     console.warn('Traduzione locale non disponibile',error);
+     if(!config.translationRemote)throw Error('Traduzione locale non disponibile: '+(error.message||String(error)));
+    }
+   }
    if(window.Translator&&typeof window.Translator.create==='function'){
     try{
-     let sourceLanguage='it';
-     if(window.LanguageDetector&&typeof window.LanguageDetector.create==='function'){
-      const detector=await window.LanguageDetector.create();
-      const detected=await detector.detect(text);
-      if(detected&&detected[0]&&detected[0].detectedLanguage)sourceLanguage=detected[0].detectedLanguage;
-      if(detector.destroy)detector.destroy();
-     }
-     if(sourceLanguage===target)return text;
-     const translator=await window.Translator.create({sourceLanguage,targetLanguage:target});
+     const translator=await window.Translator.create({sourceLanguage:'it',targetLanguage:target});
      try{return await translator.translate(text);}finally{if(translator.destroy)translator.destroy();}
-    }catch(error){console.info('Traduzione locale non disponibile',error);}
+    }catch(error){console.info('Traduzione browser non disponibile',error);}
    }
-   if(!config.translationRemote||!config.translationApi)throw Error('Motore di traduzione non configurato nelle impostazioni di IRES PDF Reader.');
+   if(!config.translationRemote||!config.translationApi)throw Error('Modello locale non disponibile per questa lingua. Configura un provider opzionale nelle impostazioni.');
    const response=await fetch(config.translationApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:'auto',target})});
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Error((data.message||'Servizio di traduzione non disponibile')+' (HTTP '+response.status+')');
