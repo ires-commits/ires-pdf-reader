@@ -16,6 +16,13 @@
 
 # Changelog
 
+## 2.13.4
+- Messaggio esplicativo elegante al primo passaggio automatico alla lettura ottimizzata, con scelta reversibile.
+- Testi della modalità tradotta localizzati in italiano, inglese, francese, tedesco, spagnolo e portoghese secondo la lingua dell'interfaccia utente.
+- Se l'utente torna al PDF, la modalità ottimizzata non viene riattivata automaticamente durante la stessa sessione di traduzione.
+- Indicazione permanente che la struttura della versione tradotta può differire dal PDF originale.
+
+
 ## 2.13.3
 - Indici tradotti come righe separate, con numeri di pagina allineati a destra e separatori discreti.
 - Corrette le sequenze di newline letterali e la ricomposizione delle righe dell'indice; i numeri di pagina non sono inviati al traduttore.
