@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.11.0
+- Primo motore neurale locale OPUS-MT per la traduzione italiano → inglese negli overlay del PDF Reader, via Transformers.js e ONNX Runtime Web (WebAssembly).
+- Traduzione senza chiave API né quota di caratteri per questa coppia linguistica; download iniziale di librerie e modello da CDN/Hugging Face, con cache browser.
+- Provider remoto configurato resta fallback facoltativo quando la traduzione locale non funziona.
+- Limiti: qualità, compatibilità Safari/iOS e prestazioni ancora da verificare sul sito; le altre lingue richiedono modelli aggiuntivi; non è ancora una soluzione interamente self-hosted.
+
+
 ## 2.10.3
 - Retry automatico con attesa progressiva per le pagine la cui traduzione fallisce temporaneamente.
 - Cache lato server per ridurre richieste ripetute al provider e l'incidenza dei limiti orari.
