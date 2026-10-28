@@ -16,6 +16,13 @@
 
 # Changelog
 
+## 2.13.1
+- Overlay Glass più uniforme, con sfocatura delicata, bordi ridotti e caratteri più leggibili.
+- Nuova modalità Lettura tradotta: pagina editoriale fluida, testo senza ritagli e pulsante per tornare al PDF.
+- Migliore gestione dei separatori di paragrafo nella modalità di lettura.
+- Le traduzioni continuano a usare cache locale e condivisa introdotte nella 2.13.0.
+
+
 ## 2.13.0
 - Overlay tradotto Glass: sfondo chiaro satinato, sfocatura moderata del PDF sottostante, tipografia di sistema, contrasto e fallback per ridotta trasparenza.
 - Cache condivisa delle traduzioni per pagina in MySQL WordPress: chiave con fingerprint PDF, pagina, lingua e hash del testo; recupero prima di avviare il modello neurale.
