@@ -306,7 +306,7 @@ async function render(url,title,root,token,citation=''){
      catch(error){c.remove();console.warn('IRES PDF Reader page render',error);}
      addTextLayer(p,slot,p.getViewport({scale}),epoch).catch(error=>console.warn('IRES PDF Reader text layer',error));
     }
-   }finally{scrollBusy=false;if(scrollAgain){scrollAgain=false;refreshVisible();}}
+   }finally{scrollBusy=false;if(translationMode){queueVisibleTranslation();showOverlays();}if(scrollAgain){scrollAgain=false;refreshVisible();}}
   }
   viewport.addEventListener('scroll',()=>{if(!continuous)return;clearTimeout(scrollTimer);scrollTimer=setTimeout(refreshVisible,100);},{passive:true});
   function navigate(){if(continuous){const slot=slots[page-1];if(slot)viewport.scrollTop=slot.offsetTop-stack.offsetTop;refreshVisible();}else schedule();}
@@ -447,7 +447,7 @@ async function render(url,title,root,token,citation=''){
   // Translation is a persistent viewing mode, not a one-page action.
   let translatedText='',translationGeneration=0,translationMode=false,translationWorker=false;
   let translationActivePage=0;
-  const translationCache=new Map(),translationPending=new Set();
+  const translationCache=new Map(),translationPending=new Set(),translationFailures=new Map();
   const encoder=new TextEncoder();
   function splitTranslation(text,maxBytes=6500){
    const chunks=[];let remaining=text.trim();
@@ -519,8 +519,23 @@ async function render(url,title,root,token,citation=''){
    return blocks.map(b=>({x:b.x,y:b.y,width:b.right-b.x,height:b.bottom-b.y,fontSize:b.font,original:b.text}));
   }
   function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay').forEach(node=>node.remove());}
+  function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
+  function showTranslationLoading(){
+   clearTranslationLoading();
+   if(!translationMode)return;
+   const pages=continuous?slots.map((slot,i)=>({holder:slot,number:i+1})).filter(({holder})=>{
+    const rect=holder.getBoundingClientRect(),v=viewport.getBoundingClientRect();
+    return rect.bottom>v.top&&rect.top<v.bottom;
+   }):[{holder:singlePage,number:page}];
+   for(const {holder,number} of pages){
+    const key=language.value+':'+number;
+    if(translationCache.has(key)||translationFailures.has(key))continue;
+    const loading=el('div','ires-pdf-translation-loading',t(2)+'…');
+    loading.setAttribute('role','status');holder.append(loading);
+   }
+  }
   function showOverlays(){
-   clearOverlays();if(!translationMode)return;
+   clearOverlays();clearTranslationLoading();if(!translationMode)return;
    const targetPages=continuous?slots.map((_,i)=>i+1):[page];
    for(const number of targetPages){
     const entry=translationCache.get(language.value+':'+number);
@@ -535,6 +550,7 @@ async function render(url,title,root,token,citation=''){
      node.title=block.original;holder.append(node);
     }
    }
+   showTranslationLoading();
   }
   function visiblePageForTranslation(){
    if(!continuous)return page;
@@ -553,7 +569,14 @@ async function render(url,title,root,token,citation=''){
    const number=visiblePageForTranslation();
    translationActivePage=number;
    if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent=t(6)+' '+number;}
-   if(!translationCache.has(language.value+':'+number))translationPending.add(number);
+   const visibleNumbers=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
+    const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
+    return rect.bottom>v.top&&rect.top<v.bottom;
+   }).map(({n})=>n):[number];
+   for(const n of [number,...visibleNumbers]){
+    if(!translationCache.has(language.value+':'+n)&&!translationFailures.has(language.value+':'+n))translationPending.add(n);
+   }
+   showTranslationLoading();
    if(!translationWorker)processTranslationQueue();
   }
   async function processTranslationQueue(){
@@ -591,7 +614,8 @@ async function render(url,title,root,token,citation=''){
       showOverlays();
      }catch(error){
       if(generation===translationGeneration)translationStatus.textContent='Pagina '+number+': '+(error.message||'traduzione non disponibile');
-      // Do not retry a failing page in a tight loop.
+      translationFailures.set(key,Date.now());showTranslationLoading();
+      // Failed pages are retried explicitly, not in a tight loop.
      }
     }
    }finally{
@@ -610,7 +634,7 @@ async function render(url,title,root,token,citation=''){
    else {queueVisibleTranslation();}
   }
   translate.onclick=()=>setTranslationMode(!translationMode);
-  translateAgain.onclick=()=>{translationCache.delete(language.value+':'+visiblePageForTranslation());if(!translationMode)setTranslationMode(true);else queueVisibleTranslation();};
+  translateAgain.onclick=()=>{translationCache.delete(language.value+':'+visiblePageForTranslation());translationFailures.delete(language.value+':'+visiblePageForTranslation());if(!translationMode)setTranslationMode(true);else queueVisibleTranslation();};
   overlayToggle.onclick=()=>setTranslationMode(!translationMode);
   language.onchange=()=>{translationGeneration++;translationPending.clear();clearOverlays();if(translationMode)queueVisibleTranslation();};
   translationSpeak.onclick=()=>{
@@ -619,6 +643,7 @@ async function render(url,title,root,token,citation=''){
   };
   viewport.addEventListener('scroll',()=>{
    if(!translationMode)return;
+   showTranslationLoading();
    clearTimeout(translationScrollTimer);
    translationScrollTimer=setTimeout(queueVisibleTranslation,220);
   },{passive:true});
