@@ -16,6 +16,12 @@
 
 # Changelog
 
+## 2.13.5
+- Indicatore di traduzione ancorato al lettore, sempre visibile durante lo scorrimento del PDF e nella lettura ottimizzata.
+- Barra di avanzamento sottile in stile Glass, percentuale e messaggi nella lingua dell'interfaccia.
+- Gli errori e il pulsante Riprova rimangono accessibili nell'indicatore flottante.
+
+
 ## 2.13.4
 - Messaggio esplicativo elegante al primo passaggio automatico alla lettura ottimizzata, con scelta reversibile.
 - Testi della modalità tradotta localizzati in italiano, inglese, francese, tedesco, spagnolo e portoghese secondo la lingua dell'interfaccia utente.
