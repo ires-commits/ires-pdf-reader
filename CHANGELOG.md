@@ -1,3 +1,7 @@
+## 2.11.3
+- Rimossa la diagnostica aggiornamenti ridondante dalla pagina impostazioni; rimane il pannello aggiornamenti condiviso.
+- Corretto Aggiorna singolarmente con handler condiviso e selezione del plugin; note di rilascio richiudibili.
+
 ## 2.11.2
 
 ## 2.12.2
