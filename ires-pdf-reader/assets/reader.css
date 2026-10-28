@@ -180,3 +180,32 @@
  .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open .ires-pdf-search-group,
  .ires-pdf-controls-shell>.ires-pdf-extra-tools.is-open .ires-pdf-actions-group{display:flex!important;flex:1 1 100%;min-width:0;flex-wrap:wrap;justify-content:flex-start}
 }
+
+
+/* v2.8 visual refresh: scoped to PDF Reader; no changes to publication templates. */
+.ires-pdf-overlay,.ires-pdf-dedicated{--ires-ink:#17324a;--ires-accent:#087f8c;--ires-accent-soft:#e4f4f4;--ires-line:#dbe5ec;--ires-panel:#f8fafc;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ires-ink)}
+.ires-pdf-overlay .ires-pdf-toolbar{background:#fff;border-bottom:1px solid var(--ires-line);padding:12px 18px;gap:12px;box-shadow:0 1px 3px #17324a0b}
+.ires-pdf-overlay .ires-pdf-toolbar strong{font-size:14px;font-weight:650;letter-spacing:-.01em}
+.ires-pdf-overlay .ires-pdf-close{border-radius:11px;background:var(--ires-ink);font-weight:650;padding:10px 15px}
+.ires-pdf-overlay .ires-pdf-controls-shell{background:#fff;border-bottom:1px solid var(--ires-line)}
+.ires-pdf-overlay .ires-pdf-controls,.ires-pdf-overlay .ires-pdf-extra-tools{background:#fff}
+.ires-pdf-overlay .ires-pdf-controls button,.ires-pdf-overlay .ires-pdf-extra-tools button,
+.ires-pdf-dedicated .ires-pdf-controls button,.ires-pdf-dedicated .ires-pdf-extra-tools button{border:1px solid transparent;border-radius:9px;background:#f1f5f8;color:var(--ires-ink);font-size:12px;font-weight:600;min-height:34px;padding:7px 10px;transition:background .15s,border-color .15s}
+.ires-pdf-overlay .ires-pdf-controls button:hover,.ires-pdf-overlay .ires-pdf-extra-tools button:hover{background:var(--ires-accent-soft);border-color:#b5d8db}
+.ires-pdf-overlay .ires-pdf-controls button:focus-visible,.ires-pdf-overlay .ires-pdf-extra-tools button:focus-visible{outline:2px solid var(--ires-accent);outline-offset:2px}
+.ires-pdf-overlay .ires-pdf-controls button[aria-pressed=true],.ires-pdf-overlay .ires-pdf-extra-tools button[aria-pressed=true]{background:var(--ires-accent-soft);color:#075b64;border-color:#b3dbdf}
+.ires-pdf-overlay .ires-pdf-extra-tools .ires-pdf-translate-action{background:var(--ires-accent);color:white;border-color:var(--ires-accent)}
+.ires-pdf-overlay .ires-pdf-extra-tools .ires-pdf-translate-action:hover{background:#066b75;color:white}
+.ires-pdf-overlay .ires-pdf-controls input,.ires-pdf-overlay .ires-pdf-extra-tools input,.ires-pdf-overlay .ires-pdf-extra-tools select{border:1px solid var(--ires-line);border-radius:9px;background:#fff;color:var(--ires-ink)}
+.ires-pdf-overlay .ires-pdf-sidebar{background:#fff;border-right:1px solid var(--ires-line)}
+.ires-pdf-overlay .ires-pdf-side-tabs{gap:4px;padding:8px;background:#fff;border-bottom:1px solid var(--ires-line)}
+.ires-pdf-overlay .ires-pdf-side-tabs button{border-radius:8px;background:#f2f6f9;color:#3b5266;font-size:12px;font-weight:600;padding:9px 5px}
+.ires-pdf-overlay .ires-pdf-pages{background:#edf2f6}
+.ires-pdf-overlay .ires-pdf-translation-panel button{border-radius:9px}
+@media(max-width:720px){
+ .ires-pdf-overlay .ires-pdf-toolbar{padding:9px 10px;gap:6px}
+ .ires-pdf-overlay .ires-pdf-toolbar strong{font-size:12px}
+ .ires-pdf-overlay .ires-pdf-controls{padding:6px;gap:4px}
+ .ires-pdf-overlay .ires-pdf-controls button{min-height:36px}
+ .ires-pdf-overlay .ires-pdf-extra-tools.is-open{background:#fff}
+}
