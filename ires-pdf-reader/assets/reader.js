@@ -43,7 +43,7 @@ async function render(url,title,root,token,citation=''){
  const speechStop=el('button','','Stop voce');speechStop.type='button';
  const speechRate=el('select','ires-pdf-speech-rate');speechRate.setAttribute('aria-label','Velocità lettura');
  [['0.75','0,75×'],['1','1×'],['1.25','1,25×'],['1.5','1,5×'],['2','2×']].forEach(([value,label])=>{const option=el('option','',label);option.value=value;speechRate.append(option);});speechRate.value='1';
- const translate=el('button','','Traduci');translate.type='button';translate.title='Traduci la selezione o la pagina corrente';
+ const translate=el('button','ires-pdf-translate-action','Traduci');translate.type='button';translate.title='Traduci la selezione o la pagina corrente';
  const passage=el('button','','Link passaggio');passage.type='button';passage.title='Copia un link alla pagina e al testo selezionato';
  navGroup.append(previous,current,total,next);
  zoomGroup.append(minus,zoomLabel,plus,fit);
@@ -512,7 +512,7 @@ async function render(url,title,root,token,citation=''){
   overlayToggle.onclick=()=>{
    overlayEnabled=!overlayEnabled;overlayToggle.setAttribute('aria-pressed',String(overlayEnabled));
    overlayToggle.textContent=overlayEnabled?'Mostra originale':'Mostra sul PDF';
-   showOverlays();
+   translate.textContent=overlayEnabled?'Originale':'Traduci';showOverlays();
   };
   function visiblePageForTranslation(){
    const center=viewport.getBoundingClientRect().top+viewport.clientHeight/2;
@@ -535,10 +535,11 @@ async function render(url,title,root,token,citation=''){
    const selectedHolder=selectedNode&&(selectedNode.nodeType===1?selectedNode:selectedNode.parentElement).closest('.ires-pdf-page-slot, .ires-pdf-single-page');
    const selected=selectedHolder&&(!continuous||Number(selectedHolder.dataset.page)===targetPage)?selectedText:'';
    let original=selected;
-   translationTab.click();translationSource.textContent='';translationResult.textContent='';translatedText='';
+   if(selected)translationTab.click();translationSource.textContent='';translationResult.textContent='';translatedText='';
    translationStatus.textContent='Preparazione del testo…';translateAgain.disabled=true;
    overlayBlocks=[];overlayPage=0;clearOverlays();overlayEnabled=false;
    overlayToggle.textContent='Mostra sul PDF';overlayToggle.setAttribute('aria-pressed','false');overlayToggle.disabled=true;
+   translate.textContent='Traduzione…';translate.disabled=true;
    try{
     let items=[];
     if(!original){
@@ -580,7 +581,7 @@ async function render(url,title,root,token,citation=''){
       }
       overlayBlocks=translatedBlocks.slice();
       overlayToggle.disabled=!overlayBlocks.length;
-      if(overlayEnabled)showOverlays();
+      if(overlayBlocks.length){overlayEnabled=true;overlayToggle.setAttribute('aria-pressed','true');overlayToggle.textContent='Mostra originale';translate.textContent='Originale';translate.disabled=false;showOverlays();}
       if(translatedBlocks.length<start+batch.length)break;
      }
      if(generation!==translationGeneration||token!==session)return;
@@ -589,9 +590,9 @@ async function render(url,title,root,token,citation=''){
       'Sovrapposizione parziale: '+translatedBlocks.length+' di '+layout.length+' paragrafi. Puoi riprovare quando il motore torna disponibile.';
     }
    }catch(error){if(generation===translationGeneration)translationStatus.textContent=error.message||'Traduzione non disponibile';}
-   finally{if(generation===translationGeneration)translateAgain.disabled=false;}
+   finally{if(generation===translationGeneration){translateAgain.disabled=false;translate.disabled=false;if(!overlayEnabled)translate.textContent='Traduci';}}
   }
-  translate.onclick=runTranslation;translateAgain.onclick=runTranslation;
+  translate.onclick=()=>{if(overlayEnabled){overlayEnabled=false;clearOverlays();overlayToggle.setAttribute('aria-pressed','false');overlayToggle.textContent='Mostra sul PDF';translate.textContent='Traduci';return;}if(overlayBlocks.length){overlayEnabled=true;showOverlays();overlayToggle.setAttribute('aria-pressed','true');overlayToggle.textContent='Mostra originale';translate.textContent='Originale';return;}runTranslation();};translateAgain.onclick=runTranslation;
   language.onchange=()=>{translationGeneration++;overlayEnabled=false;overlayBlocks=[];clearOverlays();translatedText='';translationResult.textContent='';translationStatus.textContent='Lingua modificata: premi Traduci per aggiornare.';};
   translationSpeak.onclick=()=>{
    if(!translatedText||!window.speechSynthesis||!window.SpeechSynthesisUtterance){translationStatus.textContent='Nessuna traduzione da leggere o voce non disponibile';return;}
