@@ -333,3 +333,16 @@
 }
 .ires-pdf-viewer>.ires-pdf-translation-loading.ires-pdf-translation-error{pointer-events:auto}
 @media(max-width:720px){.ires-pdf-viewer>.ires-pdf-translation-loading{bottom:calc(14px + env(safe-area-inset-bottom,0px))!important;padding:10px 13px;min-width:145px;font-size:12px}}
+
+
+/* v2.13.8 — unobtrusive protection notice for tabular pages */
+.ires-pdf-workspace>.ires-pdf-table-protection{
+ position:absolute;left:50%;bottom:clamp(16px,4vh,34px);transform:translateX(-50%);
+ z-index:105;width:max-content;max-width:min(92%,520px);
+ padding:12px 17px;border:1px solid rgba(151,213,215,.7);
+ border-radius:13px;background:rgba(235,249,248,.96);
+ -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+ color:#174d58;box-shadow:0 9px 24px rgba(20,62,77,.12);
+ font:500 13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;pointer-events:none;
+}
+@media(max-width:720px){.ires-pdf-workspace>.ires-pdf-table-protection{bottom:calc(12px + env(safe-area-inset-bottom,0px));font-size:12px;padding:10px 12px}}
