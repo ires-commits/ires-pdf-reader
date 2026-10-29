@@ -346,3 +346,13 @@
  font:500 13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;pointer-events:none;
 }
 @media(max-width:720px){.ires-pdf-workspace>.ires-pdf-table-protection{bottom:calc(12px + env(safe-area-inset-bottom,0px));font-size:12px;padding:10px 12px}}
+
+
+/* v2.13.9: semantic translated tables, values preserved and scrollable on small screens */
+.ires-pdf-reading-table-wrap{width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin:20px 0 28px;border:1px solid #d7e4e9;border-radius:12px;background:#fff;box-shadow:0 5px 20px rgba(22,54,68,.04)}
+.ires-pdf-reading-table{border-collapse:collapse;width:100%;min-width:520px;font:400 14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:#1c3948}
+.ires-pdf-reading-table th,.ires-pdf-reading-table td{padding:12px 14px;border-bottom:1px solid #e0e9ed;border-right:1px solid #edf1f3;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.ires-pdf-reading-table th{font-weight:700;background:#e9f5f5;color:#174a56}
+.ires-pdf-reading-table tr:nth-child(even) td{background:#f8fbfc}
+.ires-pdf-reading-table .ires-pdf-reading-numeric{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
+@media(max-width:650px){.ires-pdf-reading-table{font-size:13px}.ires-pdf-reading-table th,.ires-pdf-reading-table td{padding:9px 11px}}
