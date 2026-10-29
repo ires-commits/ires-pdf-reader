@@ -741,7 +741,14 @@ async function render(url,title,root,token,citation=''){
     notice.append(copy,dismiss);header.append(notice);
    }
    const article=el('article','ires-pdf-reading-article');
-   if(entry&&Array.isArray(entry.blocks)){
+   if(entry&&Array.isArray(entry.tableRows)&&entry.tableRows.length){
+    const wrap=el('div','ires-pdf-reading-table-wrap'),table=el('table','ires-pdf-reading-table'),body=el('tbody','');
+    entry.tableRows.forEach((row,i)=>{const tr=el('tr','');row.forEach(cell=>{
+     const node=el(i===0?'th':'td','',cleanTranslatedText(cell.translation));
+     if(cell.numeric)node.classList.add('ires-pdf-reading-numeric');
+     node.title=cell.original;tr.append(node);
+    });body.append(tr);});table.append(body);wrap.append(table);article.append(wrap);
+   }else if(entry&&Array.isArray(entry.blocks)){
     entry.blocks.forEach((block,i)=>{
      const value=cleanTranslatedText(block.translation);
      if(!value)return;
