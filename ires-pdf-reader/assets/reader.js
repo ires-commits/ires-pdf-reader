@@ -609,6 +609,50 @@ async function render(url,title,root,token,citation=''){
    }
    return numbered>=2||(aligned>=5&&numbered>=1);
   }
+  // Extract an editable reading table from aligned PDF text. Numerical cells stay verbatim.
+  function extractTranslatedTable(items,view){
+   const rows=[];
+   for(const item of items){
+    if(!item.str||!item.str.trim()||!Array.isArray(item.transform))continue;
+    const [x,y]=view.convertToViewportPoint(item.transform[4],item.transform[5]);
+    const font=Math.max(5,Math.abs(item.height||item.transform[3]||10));
+    let row=rows.find(r=>Math.abs(r.y-y)<Math.max(3,font*.45));
+    if(!row){row={y,parts:[]};rows.push(row);}
+    row.parts.push({x,text:item.str.trim()});
+   }
+   rows.sort((a,b)=>a.y-b.y);
+   const isNumber=text=>/^(?:[€$]?\s*[-+]?\d[\d.,%\s]*|[-+]?\d+(?:[.,]\d+)?%)$/.test(text);
+   const candidates=rows.map(row=>{
+    const parts=row.parts.sort((a,b)=>a.x-b.x);
+    const numeric=parts.filter(p=>isNumber(p.text));
+    return {row,parts,numeric,tabular:parts.length>=3&&numeric.length>=1};
+   });
+   const numericRows=candidates.filter(c=>c.tabular&&c.numeric.length>=2);
+   if(numericRows.length<2)return null;
+   // Infer column anchors from recurring numerical positions; retain original numbers.
+   const positions=numericRows.flatMap(c=>c.numeric.map(p=>p.x)).sort((a,b)=>a-b);
+   const clusters=[];
+   for(const x of positions){let c=clusters.find(c=>Math.abs(c.x-x)<22);if(c){c.x=(c.x*c.n+x)/(c.n+1);c.n++;}else clusters.push({x,n:1});}
+   const anchors=clusters.filter(c=>c.n>=2).sort((a,b)=>a.x-b.x).map(c=>c.x);
+   if(anchors.length<2)return null;
+   const cells=[];
+   let started=false;
+   for(const c of candidates){
+    const parts=c.parts;
+    if(!c.tabular){if(started&&cells.length>=2)break;continue;}
+    const line=Array.from({length:anchors.length+1},()=>[]);
+    for(const part of parts){
+     let col=0;
+     for(let i=0;i<anchors.length;i++)if(part.x>=anchors[i]-22)col=i+1;
+     line[col].push(part.text);
+    }
+    const values=line.map(x=>x.join(' ').trim());
+    if(values.filter(Boolean).length<2)continue;
+    started=true;
+    cells.push(values.map(value=>({original:value,translation:value,numeric:isNumber(value)})));
+   }
+   return cells.length>=2?cells:null;
+  }
   const tableWarnings={
    it:'Questa pagina contiene tabelle: la traduzione sovrapposta è disattivata per preservare l’associazione tra dati, righe e colonne.',
    en:'This page contains tables. Translation overlays are disabled to preserve the relationship between data, rows and columns.',
@@ -758,7 +802,8 @@ async function render(url,title,root,token,citation=''){
    }).map(({n})=>n):[page];
    for(const number of targetPages){
     const entry=translationCache.get(language.value+':'+number);
-    if(!entry||tableProtectedPages.has(number))continue;
+    if(!entry||tableProtectedPages.has(number)||entry.tableRows)continue;
+    if(entry.tableRows){if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation())setReadingMode(true);continue;}
     if(isComplexTranslationPage(entry.blocks)){
      if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation()){
       setReadingMode(true);
@@ -828,9 +873,37 @@ async function render(url,title,root,token,citation=''){
       const items=content.items.filter(item=>item.str&&item.str.trim());
       const pageView=pdfPage.getViewport({scale:1});
       if(hasTabularLayout(items,pageView)){
-       tableProtectedPages.add(number);
+       const tableRows=extractTranslatedTable(items,pageView);
+       if(!tableRows){
+        tableProtectedPages.add(number);translationBusyPage=0;translationProgress.delete(key);showOverlays();continue;
+       }
+       const original=items.map(item=>item.str).join(' ');
+       const storageKey=await translationStorageKey(number,target,'table-v1:'+original);
+       let cached=await storedTranslation(storageKey)||await sharedTranslation(storageKey);
+       if(cached&&Array.isArray(cached.tableRows)&&cached.tableRows.length===tableRows.length){
+        translationCache.set(key,cached);
+       }else{
+        const total=tableRows.reduce((n,row)=>n+row.filter(cell=>cell.original&&!cell.numeric).length,0);
+        let completed=0;
+        for(const row of tableRows){
+         for(const cell of row){
+          if(!translationMode||generation!==translationGeneration||token!==session||number!==visiblePageForTranslation())break;
+          if(!cell.original||cell.numeric)continue;
+          cell.translation=await translateLong(cell.original,target,generation);
+          completed++;
+          translationProgress.set(key,Math.round(completed/Math.max(1,total)*100));
+          showTranslationLoading();
+         }
+         if(!translationMode||generation!==translationGeneration||token!==session||number!==visiblePageForTranslation())break;
+        }
+        if(!translationMode||generation!==translationGeneration||token!==session||number!==visiblePageForTranslation())continue;
+        const entry={tableRows,original,translation:tableRows.map(row=>row.map(c=>c.translation).join(' | ')).join('\\n')};
+        translationCache.set(key,entry);
+        await storedTranslation(storageKey,entry);
+        sharedTranslation(storageKey,entry).catch(()=>{});
+       }
        translationBusyPage=0;
-       translationProgress.delete(key);
+       if(number===visiblePageForTranslation())setReadingMode(true);
        showOverlays();
        continue;
       }
