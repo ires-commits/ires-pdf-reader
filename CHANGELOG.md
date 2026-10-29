@@ -16,6 +16,13 @@
 
 # Changelog
 
+## 2.13.8
+- Protezione conservativa per pagine con tabelle: rilevamento preliminare di righe con colonne numeriche ripetute; overlay tradotti disattivati sulle pagine riconosciute per non alterare la relazione tra etichette e valori.
+- Avviso Glass non invasivo nella lingua dell'interfaccia (IT, EN, FR, DE, ES, PT); il PDF originale rimane leggibile.
+- La traduzione automatica di celle e tabelle non è ancora implementata: richiederà ricostruzione geometrica e verifica della corrispondenza dati.
+- Riconoscimento euristico da validare su PDF diversi, incluse tabelle senza colonne numeriche.
+
+
 ## 2.13.7
 - Indicatore di traduzione montato direttamente nel contenitore visibile del lettore, non più nel flusso delle pagine PDF.
 - Posizionamento flottante fisso nella parte inferiore della vista, visibile anche scorrendo il PDF o la lettura tradotta; supporto safe-area su iPhone.
