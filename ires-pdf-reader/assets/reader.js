@@ -589,6 +589,42 @@ async function render(url,title,root,token,citation=''){
    }
    return output.join(' ');
   }
+  // Conservative table guard: detect repeated aligned numeric columns before merging text.
+  function hasTabularLayout(items,view){
+   const rows=[];
+   for(const item of items){
+    if(!item.str||!item.str.trim()||!Array.isArray(item.transform))continue;
+    const [x,y]=view.convertToViewportPoint(item.transform[4],item.transform[5]);
+    const font=Math.max(5,Math.abs(item.height||item.transform[3]||10));
+    let row=rows.find(r=>Math.abs(r.y-y)<Math.max(3,font*.5));
+    if(!row){row={y,parts:[]};rows.push(row);}
+    row.parts.push({x,text:item.str.trim()});
+   }
+   let aligned=0,numbered=0;
+   for(const row of rows){
+    const parts=row.parts.sort((a,b)=>a.x-b.x);
+    const numeric=parts.filter(p=>/^(?:[€$]?\s*[-+]?\d[\d.,%\s]*|[-+]?\d+(?:[.,]\d+)?%)$/.test(p.text));
+    if(parts.length>=3&&numeric.length>=2){numbered++;aligned++;}
+    else if(parts.length>=3&&numeric.length>=1&&parts.some(p=>p.text.length>2))aligned++;
+   }
+   return numbered>=2||(aligned>=5&&numbered>=1);
+  }
+  const tableWarnings={
+   it:'Questa pagina contiene tabelle: la traduzione sovrapposta è disattivata per preservare l’associazione tra dati, righe e colonne.',
+   en:'This page contains tables. Translation overlays are disabled to preserve the relationship between data, rows and columns.',
+   fr:'Cette page contient des tableaux. La traduction superposée est désactivée pour préserver les lignes, colonnes et valeurs.',
+   de:'Diese Seite enthält Tabellen. Die Übersetzung über dem PDF ist deaktiviert, damit Zeilen, Spalten und Werte korrekt bleiben.',
+   es:'Esta página contiene tablas. La traducción superpuesta está desactivada para conservar filas, columnas y valores.',
+   pt:'Esta página contém tabelas. A tradução sobreposta está desativada para preservar linhas, colunas e valores.'
+  };
+  const tableProtectedPages=new Set();
+  function showTableProtection(){
+   root.querySelectorAll('.ires-pdf-table-protection').forEach(n=>n.remove());
+   if(!translationMode||!tableProtectedPages.has(visiblePageForTranslation()))return;
+   const banner=el('div','ires-pdf-table-protection',tableWarnings[uiLang]||tableWarnings.en);
+   banner.setAttribute('role','status');
+   workspace.append(banner);
+  }
   function isComplexTranslationPage(blocks){
    if(!blocks||!blocks.length)return false;
    const dotted=blocks.filter(b=>/\.{5,}|…{3,}|_{5,}/.test(b.original)).length;
@@ -715,13 +751,14 @@ async function render(url,title,root,token,citation=''){
   }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
+   showTableProtection();
    const targetPages=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
     const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
     return rect.bottom>v.top&&rect.top<v.bottom;
    }).map(({n})=>n):[page];
    for(const number of targetPages){
     const entry=translationCache.get(language.value+':'+number);
-    if(!entry)continue;
+    if(!entry||tableProtectedPages.has(number))continue;
     if(isComplexTranslationPage(entry.blocks)){
      if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation()){
       setReadingMode(true);
@@ -779,7 +816,8 @@ async function render(url,title,root,token,citation=''){
      if(number===null){translationPending.clear();break;}
      translationPending.delete(number);
      const key=target+':'+number;
-     if(translationCache.has(key)){showOverlays();continue;}
+     if(tableProtectedPages.has(number)){showOverlays();continue;}
+    if(translationCache.has(key)){showOverlays();continue;}
      try{
       translationBusyPage=number;
       translationProgress.set(key,0);
@@ -788,7 +826,15 @@ async function render(url,title,root,token,citation=''){
       const pdfPage=await doc.getPage(number);
       const content=await pdfPage.getTextContent();
       const items=content.items.filter(item=>item.str&&item.str.trim());
-      const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
+      const pageView=pdfPage.getViewport({scale:1});
+      if(hasTabularLayout(items,pageView)){
+       tableProtectedPages.add(number);
+       translationBusyPage=0;
+       translationProgress.delete(key);
+       showOverlays();
+       continue;
+      }
+      const layout=extractLayoutBlocks(items,pageView);
       const original=items.map(item=>item.str).join(' ');
       const storageKey=await translationStorageKey(number,target,'layout-v2:'+original);
       const previous=await storedTranslation(storageKey)||await sharedTranslation(storageKey);
@@ -860,7 +906,7 @@ async function render(url,title,root,token,citation=''){
    translate.setAttribute('aria-pressed',String(enabled));
    overlayToggle.textContent=enabled?t(24):t(23);
    overlayToggle.setAttribute('aria-pressed',String(enabled));
-   if(!enabled){clearOverlays();clearTranslationLoading();translationStatus.textContent=t(1);}
+   if(!enabled){clearOverlays();clearTranslationLoading();root.querySelectorAll('.ires-pdf-table-protection').forEach(n=>n.remove());translationStatus.textContent=t(1);}
    else {queueVisibleTranslation();}
   }
   translate.onclick=()=>setTranslationMode(!translationMode);
