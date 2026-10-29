@@ -16,6 +16,14 @@
 
 # Changelog
 
+## 2.13.9
+- Prima ricostruzione delle tabelle in modalità Lettura tradotta: righe e colonne HTML, traduzione separata delle celle testuali e conservazione letterale delle celle numeriche.
+- Layout tabellare responsive con scorrimento orizzontale su mobile e intestazioni distinguibili.
+- Cache dedicata table-v1 per evitare collisioni con le traduzioni a blocchi.
+- In caso di mancato riconoscimento strutturale resta la protezione della versione precedente: nessun overlay distruttivo.
+- Limitazione: estrazione geometrica euristica; tabelle unite, multilinea o con più tabelle sulla stessa pagina richiedono ulteriore verifica e affinamento.
+
+
 ## 2.13.8
 - Protezione conservativa per pagine con tabelle: rilevamento preliminare di righe con colonne numeriche ripetute; overlay tradotti disattivati sulle pagine riconosciute per non alterare la relazione tra etichette e valori.
 - Avviso Glass non invasivo nella lingua dell'interfaccia (IT, EN, FR, DE, ES, PT); il PDF originale rimane leggibile.
