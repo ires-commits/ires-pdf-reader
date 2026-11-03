@@ -1,3 +1,8 @@
+## 2.14.1
+- PDF Reader riutilizza automaticamente la chiave Gemini già configurata in Produzione Scientifica tramite ires_ps_gemini_api_key(), GEMINI_API_KEY in wp-config.php o variabile ambiente.
+- Nessuna seconda chiave necessaria; le credenziali non vengono inviate al browser.
+- Pilota inglese ancora attivabile manualmente dalle impostazioni del PDF Reader e riservato agli amministratori.
+
 
 ## 2.14.0 — pilota AI inglese
 - Aggiunto Gemini 2.5 Flash-Lite come motore opzionale, con chiave API custodita nelle impostazioni WordPress e chiamate server-side.
