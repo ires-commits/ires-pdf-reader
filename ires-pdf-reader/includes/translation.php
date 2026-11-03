@@ -13,7 +13,11 @@ final class IRES_PDF_Translation {
  static function translate($request){
   $provider=(string)get_option('ires_pdf_translation_provider','libretranslate');
   $api_key=(string)get_option('ires_pdf_translation_api_key','');
-  if($provider==='deepl'){
+  if($provider==='gemini'){
+   if(!current_user_can('manage_options'))return new WP_Error('ires_ai_pilot_admin','La traduzione AI pilota è riservata agli amministratori',['status'=>403]);
+   if(!$api_key)return new WP_Error('ires_ai_key','Configura la chiave Gemini nelle impostazioni',['status'=>503]);
+   $endpoint='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+  }elseif($provider==='deepl'){
    $endpoint='https://api-free.deepl.com/v2/translate';
    if(!$api_key)return new WP_Error('ires_translation_disabled','Inserisci la chiave API DeepL nelle impostazioni del lettore',['status'=>503]);
   }else{
@@ -31,7 +35,7 @@ final class IRES_PDF_Translation {
   $target=strtolower(sanitize_text_field((string)$request->get_param('target')));
   if(!$text||strlen($text)>10000||!preg_match('/^(auto|[a-z]{2}(?:-[a-z]{2})?)$/',$source)||!preg_match('/^[a-z]{2}(?:-[a-z]{2})?$/',$target))
    return new WP_Error('ires_translation_invalid','Richiesta non valida (massimo 10 KB)',['status'=>400]);
-  $cache_key='ires_pdf_translation_'.hash('sha256',$provider.'|'.$source.'|'.$target.'|'.$text);
+  $cache_key='ires_pdf_translation_'.hash('sha256',$provider.'|'.($provider==='gemini'?'gemini-2.5-flash-lite|':'').$source.'|'.$target.'|'.$text);
   $cached=get_transient($cache_key);
   if(is_string($cached))return rest_ensure_response(['translatedText'=>$cached]);
   $ip=isset($_SERVER['REMOTE_ADDR'])?(string)$_SERVER['REMOTE_ADDR']:'';
@@ -39,7 +43,11 @@ final class IRES_PDF_Translation {
   $count=(int)get_transient($key);
   if($count>=160)return new WP_Error('ires_translation_limit','Limite orario raggiunto',['status'=>429]);
   set_transient($key,$count+1,HOUR_IN_SECONDS);
-  if($provider==='deepl'){
+  if($provider==='gemini'){
+   if($target!=='en'||!in_array($source,['it','auto'],true))return new WP_Error('ires_ai_language','Il pilota AI supporta solo italiano verso inglese',['status'=>400]);
+   $payload=['contents'=>[['parts'=>[['text'=>"Translate the following Italian research publication text into clear, faithful English. Return only the translated text, no commentary. Preserve all numbers, percentages, names and formatting.\\n\\n".$text]]]],'generationConfig'=>['temperature'=>0,'maxOutputTokens'=>4096]];
+   $headers=['Content-Type'=>'application/json','x-goog-api-key'=>$api_key];
+  }elseif($provider==='deepl'){
    $payload=['text'=>[$text],'target_lang'=>strtoupper($target)];
    if($source!=='auto')$payload['source_lang']=strtoupper($source);
    $headers=['Content-Type'=>'application/json','Authorization'=>'DeepL-Auth-Key '.$api_key];
@@ -59,7 +67,7 @@ final class IRES_PDF_Translation {
    return new WP_Error('ires_translation_failed',$message,['status'=>502]);
   }
   $data=json_decode(wp_remote_retrieve_body($response),true);
-  $translated=$provider==='deepl'?($data['translations'][0]['text']??null):($data['translatedText']??null);
+  $translated=$provider==='gemini'?($data['candidates'][0]['content']['parts'][0]['text']??null):($provider==='deepl'?($data['translations'][0]['text']??null):($data['translatedText']??null));
   if(!is_string($translated))return new WP_Error('ires_translation_response','Risposta non valida',['status'=>502]);
   set_transient($cache_key,$translated,7*DAY_IN_SECONDS);
   return rest_ensure_response(['translatedText'=>$translated]);
