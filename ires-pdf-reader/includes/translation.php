@@ -13,6 +13,11 @@ final class IRES_PDF_Translation {
  static function translate($request){
   $provider=(string)get_option('ires_pdf_translation_provider','libretranslate');
   $api_key=(string)get_option('ires_pdf_translation_api_key','');
+  if($provider==='gemini'&&!$api_key){
+   if(function_exists('ires_ps_gemini_api_key'))$api_key=(string)ires_ps_gemini_api_key();
+   elseif(defined('GEMINI_API_KEY')&&GEMINI_API_KEY)$api_key=(string)GEMINI_API_KEY;
+   else $api_key=(string)getenv('GEMINI_API_KEY');
+  }
   if($provider==='gemini'){
    if(!current_user_can('manage_options'))return new WP_Error('ires_ai_pilot_admin','La traduzione AI pilota è riservata agli amministratori',['status'=>403]);
    if(!$api_key)return new WP_Error('ires_ai_key','Configura la chiave Gemini nelle impostazioni',['status'=>503]);
