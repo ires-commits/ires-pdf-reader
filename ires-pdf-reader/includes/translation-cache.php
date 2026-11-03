@@ -43,9 +43,13 @@ final class IRES_PDF_Translation_Cache {
   $key=self::key($request);
   if(!$key)return new WP_Error('ires_cache_key','Invalid cache key',['status'=>400]);
   $payload=$request->get_param('entry');
-  if(!is_array($payload)||!isset($payload['blocks'],$payload['original'],$payload['translation'])||!is_array($payload['blocks'])||count($payload['blocks'])>250||!is_string($payload['original'])||!is_string($payload['translation']))
+  if(!is_array($payload)||!isset($payload['original'],$payload['translation'])||(!isset($payload['blocks'])&&!isset($payload['tableRows']))||(isset($payload['blocks'])&&(!is_array($payload['blocks'])||count($payload['blocks'])>250))||(isset($payload['tableRows'])&&(!is_array($payload['tableRows'])||count($payload['tableRows'])>250))||!is_string($payload['original'])||!is_string($payload['translation']))
    return new WP_Error('ires_cache_payload','Invalid translation entry',['status'=>400]);
-  foreach($payload['blocks'] as $block){
+  if(isset($payload['tableRows']))foreach($payload['tableRows'] as $row){
+   if(!is_array($row)||count($row)>30)return new WP_Error('ires_cache_table','Invalid table row',['status'=>400]);
+   foreach($row as $cell)if(!is_array($cell)||!isset($cell['original'],$cell['translation'])||!is_string($cell['original'])||!is_string($cell['translation']))return new WP_Error('ires_cache_cell','Invalid table cell',['status'=>400]);
+  }
+  foreach(($payload['blocks']??[]) as $block){
    if(!is_array($block)||!isset($block['translation'],$block['original'],$block['x'],$block['y'],$block['width'],$block['height'],$block['fontSize'])||!is_string($block['translation'])||!is_string($block['original']))return new WP_Error('ires_cache_blocks','Invalid block',['status'=>400]);
    foreach(['x','y','width','height','fontSize'] as $n){if(!is_numeric($block[$n])||abs((float)$block[$n])>100000)return new WP_Error('ires_cache_geometry','Invalid geometry',['status'=>400]);}
   }
