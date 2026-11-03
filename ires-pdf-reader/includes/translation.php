@@ -35,6 +35,11 @@ final class IRES_PDF_Translation {
   $target=strtolower(sanitize_text_field((string)$request->get_param('target')));
   if(!$text||strlen($text)>10000||!preg_match('/^(auto|[a-z]{2}(?:-[a-z]{2})?)$/',$source)||!preg_match('/^[a-z]{2}(?:-[a-z]{2})?$/',$target))
    return new WP_Error('ires_translation_invalid','Richiesta non valida (massimo 10 KB)',['status'=>400]);
+  if($provider==='gemini'){
+   $daily_key='ires_pdf_gemini_pilot_'.gmdate('Ymd');
+   $used=(int)get_option($daily_key,0);
+   if($used>=100)return new WP_Error('ires_ai_daily_cap','Pilota AI: limite giornaliero di 100 richieste raggiunto',['status'=>429]);
+  }
   $cache_key='ires_pdf_translation_'.hash('sha256',$provider.'|'.($provider==='gemini'?'gemini-2.5-flash-lite|':'').$source.'|'.$target.'|'.$text);
   $cached=get_transient($cache_key);
   if(is_string($cached))return rest_ensure_response(['translatedText'=>$cached]);
