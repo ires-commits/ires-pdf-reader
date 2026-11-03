@@ -1,3 +1,8 @@
+## 2.14.2 — preparazione traduzione batch inglese
+- Aggiunta pagina Produzione Scientifica > Traduzioni AI con scansione amministrativa delle pubblicazioni e rilevamento dei PDF.
+- Inventario persistente nel database WordPress, conteggio record già presenti nella tabella delle traduzioni e diagnostica delle pubblicazioni senza PDF.
+- Fase preflight senza costi: nessuna traduzione massiva avviata. Restano da implementare estrazione PDF server-side, coda batch, mapping stabile pagine/chiavi e validazione delle tabelle.
+
 ## 2.14.1
 - PDF Reader riutilizza automaticamente la chiave Gemini già configurata in Produzione Scientifica tramite ires_ps_gemini_api_key(), GEMINI_API_KEY in wp-config.php o variabile ambiente.
 - Nessuna seconda chiave necessaria; le credenziali non vengono inviate al browser.
