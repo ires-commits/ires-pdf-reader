@@ -899,7 +899,7 @@ async function render(url,title,root,token,citation=''){
        }
        const original=items.map(item=>item.str).join(' ');
        const storageKey=await translationStorageKey(number,target,'table-v1:'+original);
-       let cached=await storedTranslation(storageKey)||await sharedTranslation(storageKey);
+       let cached=await sharedTranslation(storageKey)||await storedTranslation(storageKey);
        if(cached&&Array.isArray(cached.tableRows)&&cached.tableRows.length===tableRows.length){
         translationCache.set(key,cached);
        }else{
@@ -930,7 +930,7 @@ async function render(url,title,root,token,citation=''){
       const layout=extractLayoutBlocks(items,pageView);
       const original=items.map(item=>item.str).join(' ');
       const storageKey=await translationStorageKey(number,target,'layout-v2:'+original);
-      const previous=await storedTranslation(storageKey)||await sharedTranslation(storageKey);
+      const previous=await sharedTranslation(storageKey)||await storedTranslation(storageKey);
       if(previous&&storageKey)storedTranslation(storageKey,previous).catch(()=>{});
       if(previous&&Array.isArray(previous.blocks)&&previous.blocks.length===layout.length){
        translationCache.set(key,previous);
