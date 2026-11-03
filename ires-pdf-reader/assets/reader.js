@@ -497,7 +497,7 @@ async function render(url,title,root,token,citation=''){
      const response=await fetch(config.translationCacheApi+'?key='+encodeURIComponent(key),{credentials:'same-origin'});
      if(!response.ok)return null;
      const payload=await response.json();
-     return payload&&Array.isArray(payload.blocks)?payload:null;
+     return payload&&(Array.isArray(payload.blocks)||Array.isArray(payload.tableRows))?payload:null;
     }
     // Anonymous visitors can read shared translations, but cannot poison the cache.
     if(!config.translationCacheWrite)return null;
