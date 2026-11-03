@@ -17,6 +17,7 @@ else require_once __DIR__.'/includes/shared-updates.php';
 require_once __DIR__.'/includes/passage-store.php';
 require_once __DIR__.'/includes/translation.php';
 require_once __DIR__.'/includes/translation-cache.php';
+require_once __DIR__.'/includes/translation-batch.php';
 register_activation_hook(__FILE__,['IRES_PDF_Passage_Store','install']);
 register_activation_hook(__FILE__,['IRES_PDF_Translation_Cache','install']);
 final class IRES_PDF_Reader {
@@ -33,6 +34,7 @@ final class IRES_PDF_Reader {
   add_action('template_redirect',[__CLASS__,'dedicated'],0);
   add_filter('redirect_canonical',[__CLASS__,'preserve_shared_reader'],10,2);
   add_action('admin_menu',[__CLASS__,'admin_menu']);
+  IRES_PDF_Translation_Batch::init();
   add_action('admin_init',[__CLASS__,'register_settings']);
   add_filter('the_content',[__CLASS__,'integrate_publication'],30);
  }
