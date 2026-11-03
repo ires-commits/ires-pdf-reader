@@ -1,3 +1,10 @@
+
+## 2.14.0 — pilota AI inglese
+- Aggiunto Gemini 2.5 Flash-Lite come motore opzionale, con chiave API custodita nelle impostazioni WordPress e chiamate server-side.
+- Pilota limitato agli amministratori e alla traduzione italiano-inglese, con massimo 100 richieste non in cache al giorno; nessuna chiamata AI a pagamento da visitatori anonimi.
+- Traduzioni delle pagine e delle tabelle salvabili nella tabella MySQL condivisa del plugin; lettura pubblica delle traduzioni già presenti.
+- Restano da verificare su sito reale qualità delle tabelle, consumi e performance. Il modello non viene attivato finché l'amministratore non seleziona Gemini e inserisce la chiave.
+
 ## 2.12.4 — 28 ottobre 2026
 - Riallineato il versioning alla 2.12.3 già installata, evitando la regressione introdotta dalla numerazione 2.11.3.
 - Conservate le correzioni del pannello aggiornamenti condiviso e quelle alla traduzione presenti nel ramo principale.
