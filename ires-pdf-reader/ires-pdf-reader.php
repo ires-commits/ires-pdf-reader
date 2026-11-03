@@ -2,7 +2,7 @@
 /**
  * Plugin Name: IRES PDF Reader
  * Description: Lettore PDF responsive con overlay, pagina dedicata e integrazione pubblicazioni.
- * Version: 2.14.2
+ * Version: 2.14.3
  * Update URI: https://github.com/ires-commits/ires-pdf-reader
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -20,7 +20,7 @@ require_once __DIR__.'/includes/translation-cache.php';
 register_activation_hook(__FILE__,['IRES_PDF_Passage_Store','install']);
 register_activation_hook(__FILE__,['IRES_PDF_Translation_Cache','install']);
 final class IRES_PDF_Reader {
- const VERSION='2.14.2';
+ const VERSION='2.14.3';
  static function init() {
   add_action('init',function(){if(get_option('ires_pdf_passage_schema')!=='1')IRES_PDF_Passage_Store::install();});
   add_action('rest_api_init',['IRES_PDF_Passage_Store','routes']);
@@ -37,6 +37,7 @@ final class IRES_PDF_Reader {
   add_filter('the_content',[__CLASS__,'integrate_publication'],30);
  }
  static function register_settings() {
+  register_setting('ires_pdf_reader','ires_pdf_translation_read_only',['type'=>'boolean','sanitize_callback'=>'rest_sanitize_boolean','default'=>false]);
   register_setting('ires_pdf_reader','ires_pdf_reader_integration',['type'=>'boolean','sanitize_callback'=>'rest_sanitize_boolean','default'=>true]);
   register_setting('ires_pdf_reader','ires_pdf_translation_provider',['type'=>'string','sanitize_callback'=>[__CLASS__,'sanitize_translation_provider'],'default'=>'libretranslate']);
   register_setting('ires_pdf_reader','ires_pdf_translation_endpoint',['type'=>'string','sanitize_callback'=>'esc_url_raw','default'=>'']);
@@ -53,6 +54,7 @@ final class IRES_PDF_Reader {
   echo '<p><label><input type="checkbox" name="ires_pdf_reader_integration" value="1" '.checked(get_option('ires_pdf_reader_integration',true),true,false).'> Integrazione automatica nelle pubblicazioni</label></p>';
   echo '<p><label>Chiave campo PDF ACF: <input name="ires_pdf_reader_meta_key" value="'.esc_attr(get_option('ires_pdf_reader_meta_key','')).'"></label></p>';
   echo '<hr><h2>Traduzione lato server</h2><p>Il testo viene inviato al fornitore selezionato soltanto quando il lettore preme Traduci. Le chiavi API rimangono sul server WordPress. Verifica le condizioni di trattamento dei dati del fornitore.</p>';
+  echo '<p><input type="hidden" name="ires_pdf_translation_read_only" value="0"><label><input type="checkbox" name="ires_pdf_translation_read_only" value="1" '.checked(get_option('ires_pdf_translation_read_only',false),true,false).'> Usa solo traduzioni salvate nel database (senza traduzione in tempo reale)</label></p>';
   $provider=get_option('ires_pdf_translation_provider','libretranslate');
   echo '<p><label>Motore: <select name="ires_pdf_translation_provider"><option value="libretranslate" '.selected($provider,'libretranslate',false).'>LibreTranslate (endpoint personalizzato)</option><option value="deepl" '.selected($provider,'deepl',false).'>DeepL API Free</option><option value="gemini" '.selected($provider,'gemini',false).'>Gemini Flash-Lite (pilota inglese)</option></select></label></p>';
   echo '<p><small>Gemini riutilizza automaticamente GEMINI_API_KEY già configurata per Produzione Scientifica (wp-config.php o variabile ambiente). Non inserire una seconda chiave. Il pilota è riservato agli amministratori.</small></p>';
@@ -80,7 +82,7 @@ final class IRES_PDF_Reader {
   wp_enqueue_style('ires-pdf-reader',plugins_url('assets/reader.css',__FILE__),[],self::VERSION);
   wp_enqueue_script('ires-pdf-reader-pdfjs',plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),[],self::VERSION,true);
   wp_enqueue_script('ires-pdf-reader',plugins_url('assets/reader.js',__FILE__),['ires-pdf-reader-pdfjs'],self::VERSION,true);
-  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/'),'passageApi'=>rest_url('ires-pdf-reader/v1/passages'),'translationApi'=>rest_url('ires-pdf-reader/v1/translate'),'translationCacheApi'=>rest_url('ires-pdf-reader/v1/translation-cache'),'translationCacheWrite'=>current_user_can('manage_options'),'translationCacheNonce'=>wp_create_nonce('wp_rest'),'translationWorkerUrl'=>plugins_url('assets/translation-worker.js',__FILE__),'translationAiPilot'=>(get_option('ires_pdf_translation_provider','libretranslate')==='gemini'&&current_user_can('manage_options')),'translationRemote'=>(get_option('ires_pdf_translation_provider','libretranslate')==='gemini'?(bool)(get_option('ires_pdf_translation_api_key','')||(function_exists('ires_ps_gemini_api_key')&&ires_ps_gemini_api_key())||(defined('GEMINI_API_KEY')&&GEMINI_API_KEY)||getenv('GEMINI_API_KEY')):(get_option('ires_pdf_translation_provider','libretranslate')==='deepl'?!!get_option('ires_pdf_translation_api_key',''):!!get_option('ires_pdf_translation_endpoint',''))),'scientificIntegration'=>(bool)get_option('ires_pdf_reader_integration',true)]).';','before');
+  wp_add_inline_script('ires-pdf-reader','window.iresPdfReader='.wp_json_encode(['pdfjsUrl'=>plugins_url('vendor/pdfjs/pdf.min.js',__FILE__),'workerUrl'=>plugins_url('vendor/pdfjs/pdf.worker.min.js',__FILE__),'dedicatedUrl'=>home_url('/'),'passageApi'=>rest_url('ires-pdf-reader/v1/passages'),'translationApi'=>rest_url('ires-pdf-reader/v1/translate'),'translationCacheApi'=>rest_url('ires-pdf-reader/v1/translation-cache'),'translationCacheWrite'=>current_user_can('manage_options'),'translationCacheNonce'=>wp_create_nonce('wp_rest'),'translationWorkerUrl'=>plugins_url('assets/translation-worker.js',__FILE__),'translationReadOnly'=>(bool)get_option('ires_pdf_translation_read_only',false),'translationAiPilot'=>(get_option('ires_pdf_translation_provider','libretranslate')==='gemini'&&current_user_can('manage_options')),'translationRemote'=>(get_option('ires_pdf_translation_provider','libretranslate')==='gemini'?(bool)(get_option('ires_pdf_translation_api_key','')||(function_exists('ires_ps_gemini_api_key')&&ires_ps_gemini_api_key())||(defined('GEMINI_API_KEY')&&GEMINI_API_KEY)||getenv('GEMINI_API_KEY')):(get_option('ires_pdf_translation_provider','libretranslate')==='deepl'?!!get_option('ires_pdf_translation_api_key',''):!!get_option('ires_pdf_translation_endpoint',''))),'scientificIntegration'=>(bool)get_option('ires_pdf_reader_integration',true)]).';','before');
  }
  static function shortcode($atts) {
   $a=shortcode_atts(['url'=>'','title'=>'Documento PDF','mode'=>'both','label'=>'Leggi il PDF','citation'=>''],$atts,'ires_pdf_reader');
