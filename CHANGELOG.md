@@ -1,3 +1,11 @@
+## 2.14.3 — lettura delle traduzioni condivise
+- PDF Reader non contiene piu alcuna pagina o funzione amministrativa di traduzione batch.
+- Il lettore consulta prima la tabella condivisa MySQL tramite l'API translation-cache, poi la cache locale IndexedDB.
+- Nuova opzione nelle impostazioni: "Usa solo traduzioni salvate nel database"; quando attiva non chiama i motori di traduzione in tempo reale per le pagine mancanti.
+- Corretto un ramo irraggiungibile che impediva il passaggio automatico alla vista lettura delle tabelle tradotte presenti in cache.
+- Compatibilita iniziale con il formato esistente (blocks/tableRows e chiavi v1 PDF fingerprint/pagina/lingua/hash testo). Il plugin che produce il batch dovra scrivere esattamente tale formato, oppure sara necessaria una futura API di compatibilita.
+- Modalita database-only disattivata per impostazione predefinita, per non interrompere la traduzione attuale prima del popolamento dell'archivio.
+
 ## 2.14.2 — preparazione traduzione batch inglese
 - Aggiunta pagina Produzione Scientifica > Traduzioni AI con scansione amministrativa delle pubblicazioni e rilevamento dei PDF.
 - Inventario persistente nel database WordPress, conteggio record già presenti nella tabella delle traduzioni e diagnostica delle pubblicazioni senza PDF.
