@@ -559,8 +559,21 @@ async function render(url,title,root,token,citation=''){
     worker.postMessage({id,text,target});
    });
   }
+  async function translateAiPilot(text,target){
+   if(target!=='en')throw Error('Il pilota AI traduce soltanto in inglese');
+   const response=await fetch(config.translationApi,{
+    method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json','X-WP-Nonce':config.translationCacheNonce||''},
+    body:JSON.stringify({text,source:'it',target:'en'})
+   });
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error((data.message||'Traduzione AI non disponibile')+' (HTTP '+response.status+')');
+   if(typeof data.translatedText!=='string')throw Error('Risposta AI non valida');
+   return data.translatedText;
+  }
   async function translateText(text,target){
    if(target==='it')return text;
+   if(config.translationAiPilot)return translateAiPilot(text,target);
    if(localModels['it-'+target]){
     try{return await localTranslate(text,target);}
     catch(error){
@@ -575,7 +588,7 @@ async function render(url,title,root,token,citation=''){
     }catch(error){console.info('Traduzione browser non disponibile',error);}
    }
    if(!config.translationRemote||!config.translationApi)throw Error('Modello locale non disponibile per questa lingua. Configura un provider opzionale nelle impostazioni.');
-   const response=await fetch(config.translationApi,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:'auto',target})});
+   const response=await fetch(config.translationApi,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':config.translationCacheNonce||''},body:JSON.stringify({text,source:'auto',target})});
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Error((data.message||'Servizio di traduzione non disponibile')+' (HTTP '+response.status+')');
    if(typeof data.translatedText!=='string')throw Error('Risposta del servizio non valida');
