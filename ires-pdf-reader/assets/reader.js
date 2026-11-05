@@ -7,6 +7,21 @@ function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.cla
 function close(){stopSpeech();session++;if(!active)return;active.remove();active=null;document.body.style.overflow='';document.removeEventListener('keydown',keys);if(lastFocus&&lastFocus.focus)lastFocus.focus();}
 function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){const controls=[...active.querySelectorAll('a,button,input')].filter(x=>!x.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
 async function render(url,title,root,token,citation=''){
+ const publicationMatch=document.body.className.match(/(?:^|\\s)postid-(\\d+)(?:\\s|$)/);
+ const scientificPublicationId=publicationMatch?Number(publicationMatch[1]):0;
+ async function scientificEnglishPage(number){
+  if(!scientificPublicationId||!config.scientificTranslationApi||language.value!=='en')return null;
+  try{
+   const endpoint=new URL(config.scientificTranslationApi,window.location.href);
+   endpoint.searchParams.set('publication_id',String(scientificPublicationId));
+   endpoint.searchParams.set('page',String(number));
+   endpoint.searchParams.set('language','en');
+   const response=await fetch(endpoint.toString(),{credentials:'same-origin'});
+   if(!response.ok)return null;
+   const payload=await response.json();
+   return payload&&typeof payload.translation==='string'&&payload.translation.trim()?payload.translation:null;
+  }catch(_){return null;}
+ }
  const browserLang=(navigator.languages&&navigator.languages[0]||navigator.language||'it').toLowerCase().split('-')[0];
  const supported=['it','en','fr','de','es','pt'];
  const uiLang=supported.includes(browserLang)?browserLang:(browserLang==='it'?'it':'en');
@@ -761,6 +776,8 @@ async function render(url,title,root,token,citation=''){
      if(cell.numeric)node.classList.add('ires-pdf-reading-numeric');
      node.title=cell.original;tr.append(node);
     });body.append(tr);});table.append(body);wrap.append(table);article.append(wrap);
+   }else if(entry&&typeof entry.scientificText==='string'){
+    entry.scientificText.split(/\\n\\s*\\n/).filter(Boolean).forEach(paragraph=>article.append(el('p','',paragraph.trim())));
    }else if(entry&&Array.isArray(entry.blocks)){
     entry.blocks.forEach((block,i)=>{
      const value=cleanTranslatedText(block.translation);
