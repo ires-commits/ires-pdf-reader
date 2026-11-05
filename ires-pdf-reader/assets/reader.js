@@ -12,8 +12,8 @@ async function render(url,title,root,token,citation=''){
  async function scientificGeometryPage(number){
   if(!scientificPublicationId||!config.scientificBlocksApi||language.value!=='en')return null;
   try{
-   const endpoint=new URL(config.scientificBlocksApi.replace(/\\/0\\/0$/, ''),window.location.href);
-   endpoint.pathname=endpoint.pathname.replace(/\\/$/,'')+'/'+scientificPublicationId+'/'+number;
+   const endpoint=new URL(config.scientificBlocksApi,window.location.href);
+   endpoint.pathname=endpoint.pathname.replace(/\/$/,'')+'/'+scientificPublicationId+'/'+number;
    const response=await fetch(endpoint.toString(),{credentials:'same-origin'});
    if(!response.ok)return null;
    const payload=await response.json();
