@@ -9,6 +9,18 @@ function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){
 async function render(url,title,root,token,citation=''){
  const publicationMatch=document.body.className.match(/(?:^|\\s)postid-(\\d+)(?:\\s|$)/);
  const scientificPublicationId=publicationMatch?Number(publicationMatch[1]):0;
+ async function scientificGeometryPage(number){
+  if(!scientificPublicationId||!config.scientificBlocksApi||language.value!=='en')return null;
+  try{
+   const endpoint=new URL(config.scientificBlocksApi.replace(/\\/0\\/0$/, ''),window.location.href);
+   endpoint.pathname=endpoint.pathname.replace(/\\/$/,'')+'/'+scientificPublicationId+'/'+number;
+   const response=await fetch(endpoint.toString(),{credentials:'same-origin'});
+   if(!response.ok)return null;
+   const payload=await response.json();
+   if(payload.schemaVersion!==1||payload.coordinateSystem!=='pdfjs-viewport-1'||payload.publicationId!==scientificPublicationId||payload.page!==number)return null;
+   return payload;
+  }catch(_){return null;}
+ }
  async function scientificEnglishPage(number){
   if(!scientificPublicationId||!config.scientificTranslationApi||language.value!=='en')return null;
   try{
