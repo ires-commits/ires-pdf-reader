@@ -1,3 +1,11 @@
+## 2.14.4 — lettura traduzioni Produzione Scientifica
+- Endpoint REST pubblico di sola lettura per le traduzioni inglesi salvate nella tabella ires_ps_translated_pages.
+- Verifica pubblicazione pubblicata, lingua inglese e corrispondenza con l'hash del PDF indicizzato; nessuna chiamata Gemini e nessuna modifica ai dati dell'altro plugin.
+- Nelle pagine singole WordPress delle pubblicazioni, il lettore prova prima la traduzione scientifica e la presenta nella vista lettura con paragrafi.
+- Se manca una traduzione valida resta disponibile il comportamento precedente (cache PDF Reader o traduzione in tempo reale, salvo opzione sola lettura).
+- Limite: la traduzione scientifica e testo di pagina, non blocchi geometrici; quindi viene mostrata in vista lettura, non come overlay sul PDF. L'associazione automatica richiede la classe body WordPress postid-ID.
+- Nessun motore batch nel PDF Reader.
+
 ## 2.14.3 — lettura delle traduzioni condivise
 - PDF Reader non contiene piu alcuna pagina o funzione amministrativa di traduzione batch.
 - Il lettore consulta prima la tabella condivisa MySQL tramite l'API translation-cache, poi la cache locale IndexedDB.
