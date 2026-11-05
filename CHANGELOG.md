@@ -1,3 +1,11 @@
+## 2.14.5 — overlay da Produzione Scientifica
+- Lettura endpoint /wp-json/ires-ps/v1/translation-blocks/{publicationId}/{page}.
+- Overlay solo con overlayAvailable=true e blocchi verified, tradotti e geometricamente validi; coordinate PDF.js viewport scala 1, origine in alto a sinistra.
+- Scala basata sulla larghezza effettiva del canvas rispetto a metadata.pageWidth; il reader usa la rotazione nativa della pagina.
+- Fallback alla vista di lettura quando readingTranslation e disponibile e gli overlay non sono verificati.
+- Nessuna scrittura nel database Produzione Scientifica e nessuna chiamata AI per le pagine gia tradotte.
+- Limitazioni: associazione pubblicazione tramite classe body postid-ID; verificare il funzionamento in overlay aperti da archivi e in modalita pagina dedicata. Test WordPress end-to-end non eseguiti.
+
 ## 2.14.4 — lettura traduzioni Produzione Scientifica
 - Endpoint REST pubblico di sola lettura per le traduzioni inglesi salvate nella tabella ires_ps_translated_pages.
 - Verifica pubblicazione pubblicata, lingua inglese e corrispondenza con l'hash del PDF indicizzato; nessuna chiamata Gemini e nessuna modifica ai dati dell'altro plugin.
