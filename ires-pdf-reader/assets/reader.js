@@ -7,7 +7,7 @@ function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.cla
 function close(){stopSpeech();session++;if(!active)return;active.remove();active=null;document.body.style.overflow='';document.removeEventListener('keydown',keys);if(lastFocus&&lastFocus.focus)lastFocus.focus();}
 function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){const controls=[...active.querySelectorAll('a,button,input')].filter(x=>!x.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
 async function render(url,title,root,token,citation=''){
- const publicationMatch=document.body.className.match(/(?:^|\\s)postid-(\\d+)(?:\\s|$)/);
+ const publicationMatch=document.body.className.match(/(?:^|\s)postid-(\d+)(?:\s|$)/);
  const scientificPublicationId=publicationMatch?Number(publicationMatch[1]):0;
  async function scientificGeometryPage(number){
   if(!scientificPublicationId||!config.scientificBlocksApi||language.value!=='en')return null;
@@ -33,6 +33,36 @@ async function render(url,title,root,token,citation=''){
    const payload=await response.json();
    return payload&&typeof payload.translation==='string'&&payload.translation.trim()?payload.translation:null;
   }catch(_){return null;}
+ }
+ // IRES Produzione Scientifica stores approved English page translations separately
+ // from PDF.js block geometry. Reuse both WITHOUT invoking any translation provider.
+ // Only server-verified one-to-one blocks are safe for a position-based overlay;
+ // unaligned pages use the readable English version instead.
+ async function scientificStoredPage(number,target){
+  if(target!=='en'||!scientificPublicationId)return null;
+  const geometry=await scientificGeometryPage(number);
+  const savedText=geometry&&typeof geometry.readingTranslation==='string'?
+    geometry.readingTranslation.trim():'';
+  const translated=savedText||(await scientificEnglishPage(number))||'';
+  if(!translated.trim())return null;
+  const rows=geometry&&Array.isArray(geometry.blocks)?geometry.blocks:[];
+  const verified=Boolean(geometry&&geometry.overlayAvailable===true&&rows.length&&
+   rows.every(block=>block.alignmentStatus==='verified'&&
+    typeof block.translation==='string'&&block.translation.trim()&&
+    ['x','y','width','height','fontSize'].every(k=>Number.isFinite(Number(block[k])))&&
+    Number(block.width)>0&&Number(block.height)>0&&Number(block.fontSize)>0));
+  const blocks=verified?rows.map(block=>({
+    x:Number(block.x),y:Number(block.y),
+    width:Number(block.width),height:Number(block.height),
+    fontSize:Number(block.fontSize),
+    original:String(block.original||''),translation:String(block.translation),
+    alignmentStatus:block.alignmentStatus
+  })):[];
+  return {
+    scientific:true,verifiedOverlay:verified,blocks,
+    scientificText:translated,translation:translated,
+    original:rows.map(b=>String(b.original||'')).join(' ')
+  };
  }
  const browserLang=(navigator.languages&&navigator.languages[0]||navigator.language||'it').toLowerCase().split('-')[0];
  const supported=['it','en','fr','de','es','pt'];
@@ -852,6 +882,15 @@ async function render(url,title,root,token,citation=''){
    for(const number of targetPages){
     const entry=translationCache.get(language.value+':'+number);
     if(!entry||tableProtectedPages.has(number)||entry.tableRows)continue;
+    // Never render page-level translations over unrelated PDF.js fragments.
+    // If the saved page lacks verified block alignment, switch to reading mode.
+    if(entry.scientific&&!entry.verifiedOverlay){
+     if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation()){
+      setReadingMode(true);
+      return;
+     }
+     continue;
+    }
     if(entry.tableRows){if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation())setReadingMode(true);continue;}
     if(isComplexTranslationPage(entry.blocks)){
      if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation()){
@@ -917,6 +956,24 @@ async function render(url,title,root,token,citation=''){
       translationProgress.set(key,0);
       showTranslationLoading();
       translationStatus.textContent='Traduzione pagina '+number+'…';
+      if(target==='en'){
+       const saved=await scientificStoredPage(number,target);
+       if(!translationMode||generation!==translationGeneration||token!==session)break;
+       if(number!==visiblePageForTranslation())continue;
+       if(saved){
+        translationCache.set(key,saved);
+        translationProgress.set(key,100);
+        translationBusyPage=0;
+        translatedText=saved.translation;
+        translationSource.textContent=saved.original;
+        translationResult.textContent=saved.translation;
+        translationStatus.textContent=saved.verifiedOverlay?
+         'Pagina '+number+': traduzione verificata sul PDF':
+         'Pagina '+number+': traduzione salvata · lettura ottimizzata';
+        showOverlays();
+        continue;
+       }
+      }
       const pdfPage=await doc.getPage(number);
       const content=await pdfPage.getTextContent();
       const items=content.items.filter(item=>item.str&&item.str.trim());
