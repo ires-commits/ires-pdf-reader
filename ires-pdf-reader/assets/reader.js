@@ -868,7 +868,7 @@ async function render(url,title,root,token,citation=''){
    if(readingMode){renderReadingView();readingView.scrollTop=0;}else showOverlays();
   }
   readingToggle.onclick=()=>setReadingMode(!readingMode);
-  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-page-translation-overlay').forEach(node=>node.remove());}
+  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
   function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
   function showTranslationLoading(){
    clearTranslationLoading();
@@ -897,49 +897,46 @@ async function render(url,title,root,token,citation=''){
   // An untranslated PDF must remain visible: a page-bound panel is the safe
   // fallback for a saved full-page translation whose passages have not yet
   // been reconciled to PDF.js text geometry. It is NOT an invented inline match.
+  // An unaligned page translation must never cover the PDF itself.
+  // Present only a compact action strip. The full pretranslation remains
+  // accessible through the reader's manual "Lettura tradotta" control.
   function pageTranslationPanel(holder,number,entry){
-   const panel=el('section','ires-pdf-page-translation-overlay');
-   panel.setAttribute('role','region');
-   panel.setAttribute('aria-label','Traduzione inglese della pagina '+number);
-   if(pageOverlayCollapsed.has(number))panel.classList.add('is-collapsed');
-   const header=el('div','ires-pdf-page-translation-header');
-   const title=el('strong','',language.value.toUpperCase()+' · '+t(6)+' '+number);
-   const collapse=el('button','ires-pdf-page-translation-collapse',
-    pageOverlayCollapsed.has(number)?'+':'−');
-   collapse.type='button';
-   collapse.setAttribute('aria-label',pageOverlayCollapsed.has(number)?'Espandi traduzione':'Riduci traduzione');
-   collapse.onclick=()=>{
-    const folded=panel.classList.toggle('is-collapsed');
-    if(folded)pageOverlayCollapsed.add(number);else pageOverlayCollapsed.delete(number);
-    collapse.textContent=folded?'+':'−';
-    collapse.setAttribute('aria-label',folded?'Espandi traduzione':'Riduci traduzione');
-   };
-   header.append(title,collapse);
-   const detail=el('p','ires-pdf-page-translation-detail',
-    'Traduzione sulla pagina originale · allineamento dei singoli paragrafi non ancora disponibile');
-   const body=el('div','ires-pdf-page-translation-body');
-   const copy=el('div','ires-pdf-page-translation-copy',
-    entry.scientificText||entry.translation||'');
-   body.append(detail,copy);
+   const panel=el('div','ires-pdf-page-translation-prompt');
+   panel.setAttribute('role','group');
+   panel.setAttribute('aria-label','Traduzione della pagina '+number);
+   const heading=el('span','ires-pdf-page-translation-prompt-title',
+    'EN · '+t(6)+' '+number+' · Traduzione disponibile');
+   panel.append(heading);
+   const status=el('span','ires-pdf-page-translation-prompt-status',
+    entry.tableRows?'Tabella: originale preservato':'Da posizionare nei paragrafi originali');
+   panel.append(status);
    if(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated){
     const inline=el('button','ires-pdf-page-translation-inline',
-      inlineOverlayBusy.has(number)?'Preparazione nel layout…':'Traduci nei blocchi del PDF');
+     inlineOverlayBusy.has(number)?'Allineamento in corso…':'Mostra inglese nel testo del PDF');
     inline.type='button';
     inline.disabled=inlineOverlayBusy.has(number);
-    inline.title='Traduce i singoli blocchi per associarli alle posizioni originali. Richiede un esplicito avvio.';
+    inline.setAttribute('aria-label','Traduci i blocchi della pagina '+number+' e posizionali sul PDF originale');
+    inline.title='Genera e memorizza la traduzione dei blocchi di testo della sola pagina, nel loro posizionamento PDF originale.';
     inline.onclick=async()=>{
-      if((config.translationAiPilot||config.translationRemote)&&!window.confirm(
-        'La traduzione dei singoli blocchi può utilizzare un servizio esterno e comportare costi API. Procedere soltanto per questa pagina?'))return;
-      inline.disabled=true;
-      try{await prepareInlineOverlay(number,inline);}
-      catch(err){
-       translationStatus.textContent='Overlay pagina '+number+': '+(err.message||'non disponibile');
-       inline.textContent='Riprova la traduzione nel layout';
-      }finally{inline.disabled=false;}
+     if((config.translationAiPilot||config.translationRemote)&&!window.confirm(
+      'La traduzione dei singoli blocchi può utilizzare un servizio esterno e comportare costi API. Procedere soltanto per questa pagina?'))return;
+     inline.disabled=true;
+     inline.textContent='Preparazione overlay…';
+     try{await prepareInlineOverlay(number,inline);}
+     catch(err){
+      const message=err&&err.message?err.message:'Non disponibile';
+      translationStatus.textContent='Pagina '+number+': '+message;
+      status.textContent=message;
+      inline.textContent='Riprova overlay nel PDF';
+     }finally{inline.disabled=false;}
     };
-    body.append(inline);
+    panel.append(inline);
    }
-   panel.append(header,body);
+   const reading=el('button','ires-pdf-page-translation-reading','Lettura alternativa');
+   reading.type='button';
+   reading.title='Apri la traduzione completa in modalità lettura, senza modificare il PDF';
+   reading.onclick=()=>{translationActivePage=number;setReadingMode(true);};
+   panel.append(reading);
    holder.append(panel);
   }
   // Only activated by the visible per-page button. It translates the extracted
@@ -1082,7 +1079,7 @@ async function render(url,title,root,token,citation=''){
         translationResult.textContent=saved.translation;
         translationStatus.textContent=saved.verifiedOverlay||saved.layoutGenerated?
          'Pagina '+number+': testo tradotto nei blocchi del PDF':
-         'Pagina '+number+': traduzione sovrapposta al PDF (pagina intera)';
+         'Pagina '+number+': traduzione pronta per il posizionamento nel PDF';
         showOverlays();
         continue;
        }
