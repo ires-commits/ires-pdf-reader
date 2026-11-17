@@ -1028,8 +1028,17 @@ async function render(url,title,root,token,citation=''){
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
      node.style.overflow='auto';
-     node.style.fontSize=Math.max(9,Math.min(15,block.fontSize*scale))+'px';
+     const initialFont=Math.max(9,Math.min(17,block.fontSize*scale));
+     node.style.fontSize=initialFont+'px';
      node.title=block.original;holder.append(node);
+     // Keep most translations readable without a nested scrollbar. English
+     // can be longer than Italian; shrink conservatively inside the exact box.
+     if(node.clientHeight>10&&node.scrollHeight>node.clientHeight+3){
+      for(const ratio of [.93,.86,.8]){
+       node.style.fontSize=Math.max(8,initialFont*ratio)+'px';
+       if(node.scrollHeight<=node.clientHeight+3)break;
+      }
+     }
     }
    }
    showTranslationLoading();
