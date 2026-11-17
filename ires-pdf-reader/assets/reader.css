@@ -356,3 +356,46 @@
 .ires-pdf-reading-table tr:nth-child(even) td{background:#f8fbfc}
 .ires-pdf-reading-table .ires-pdf-reading-numeric{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
 @media(max-width:650px){.ires-pdf-reading-table{font-size:13px}.ires-pdf-reading-table th,.ires-pdf-reading-table td{padding:9px 11px}}
+
+
+/* v2.14.7 — Page-anchored translation: keep the original PDF canvas on screen.
+ * Unaligned scientific translations have a clearly labelled glass overlay.
+ * Verified or separately translated PDF.js blocks retain inline positioning. */
+.ires-pdf-page-translation-overlay{
+ position:absolute;z-index:13;top:2%;right:2%;box-sizing:border-box;
+ width:min(64%,490px);max-width:94%;max-height:88%;
+ display:flex;flex-direction:column;
+ border:1px solid rgba(207,223,233,.95);border-radius:13px;
+ background:rgba(250,253,255,.96);color:#193346;
+ box-shadow:0 12px 30px rgba(15,38,55,.22);
+ -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+ font:400 13px/1.48 system-ui,-apple-system,"Segoe UI",sans-serif;
+ overflow:hidden;pointer-events:auto;
+}
+.ires-pdf-page-translation-header{
+ display:flex;align-items:center;justify-content:space-between;gap:8px;
+ flex:none;padding:9px 12px;border-bottom:1px solid rgba(202,216,227,.8);
+ background:rgba(232,243,248,.95);font-size:12px;letter-spacing:.02em;
+}
+.ires-pdf-page-translation-header strong{font-weight:750}
+.ires-pdf-page-translation-collapse{
+ flex:none;min-width:28px;min-height:28px;padding:0 6px;
+ border:1px solid #bacfda;border-radius:7px;background:white;
+ font:700 19px/1 system-ui;color:#1c4d64;cursor:pointer;
+}
+.ires-pdf-page-translation-body{overflow:auto;overscroll-behavior:contain;padding:12px;min-height:0}
+.ires-pdf-page-translation-detail{font-size:11px;line-height:1.4;color:#506b7c;margin:0 0 10px}
+.ires-pdf-page-translation-copy{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.56}
+.ires-pdf-page-translation-inline{
+ display:block;margin:14px 0 0;width:100%;padding:9px 10px;
+ border:1px solid #7294a9;border-radius:8px;background:#ebf6fb;
+ color:#15516c;font:600 12px/1.4 system-ui;cursor:pointer
+}
+.ires-pdf-page-translation-inline[disabled]{opacity:.6;cursor:progress}
+.ires-pdf-page-translation-overlay.is-collapsed{width:auto;max-height:none}
+.ires-pdf-page-translation-overlay.is-collapsed .ires-pdf-page-translation-body{display:none}
+.ires-pdf-page-translation-overlay.is-collapsed .ires-pdf-page-translation-header{border-bottom:0}
+@media(max-width:720px){
+ .ires-pdf-page-translation-overlay{width:min(86%,390px);max-height:76%;top:3%;right:3%;font-size:12px}
+ .ires-pdf-page-translation-body{padding:10px}
+}
