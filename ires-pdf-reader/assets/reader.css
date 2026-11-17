@@ -399,3 +399,45 @@
  .ires-pdf-page-translation-overlay{width:min(86%,390px);max-height:76%;top:3%;right:3%;font-size:12px}
  .ires-pdf-page-translation-body{padding:10px}
 }
+
+
+/* v2.14.8: compact positioning action, NOT a full-page English text panel.
+ * Preserve the PDF artwork; never obscure charts with untranslated layout text. */
+.ires-pdf-page-translation-prompt{
+ position:absolute;top:10px;right:10px;z-index:14;
+ display:flex;flex-direction:column;align-items:stretch;gap:7px;
+ box-sizing:border-box;width:min(280px,86%);padding:10px;
+ border:1px solid #c9dce7;border-radius:12px;
+ background:rgba(248,252,255,.97);color:#1a384c;
+ box-shadow:0 7px 22px rgba(21,50,70,.17);
+ font:500 12px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;
+ pointer-events:auto;
+}
+.ires-pdf-page-translation-prompt-title{font-size:12px;font-weight:750}
+.ires-pdf-page-translation-prompt-status{font-size:11px;color:#506c7d}
+.ires-pdf-page-translation-prompt button{
+ display:block;width:100%;border-radius:7px;padding:8px 9px;
+ font:650 12px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;
+ cursor:pointer;white-space:normal;
+}
+.ires-pdf-page-translation-prompt .ires-pdf-page-translation-inline{
+ margin:0;background:#145c78;color:white;border:1px solid #145c78;
+}
+.ires-pdf-page-translation-prompt .ires-pdf-page-translation-inline:hover{background:#0e4b67}
+.ires-pdf-page-translation-prompt .ires-pdf-page-translation-reading{
+ background:white;border:1px solid #b8ceda;color:#284e62;
+}
+.ires-pdf-page-translation-prompt button:disabled{cursor:progress;opacity:.7}
+@media(min-width:1480px){
+ .ires-pdf-single-page>.ires-pdf-page-translation-prompt,
+ .ires-pdf-page-slot>.ires-pdf-page-translation-prompt{
+  left:calc(100% + 12px);right:auto;top:12px;width:270px;
+ }
+}
+@media(max-width:720px){
+ .ires-pdf-page-translation-prompt{
+  top:8px;right:8px;width:min(236px,77%);padding:8px;gap:5px;
+  font-size:11px;
+ }
+ .ires-pdf-page-translation-prompt button{font-size:11px;padding:6px 7px}
+}
