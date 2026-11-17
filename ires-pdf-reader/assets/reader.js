@@ -75,7 +75,7 @@ async function render(url,title,root,token,citation=''){
        cached.blocks.length>0&&cached.blocks.every((b,i)=>
          b.original===layout[i].original&&typeof b.translation==='string'&&b.translation.trim()&&
          ['x','y','width','height','fontSize'].every(k=>Number.isFinite(Number(b[k]))))){
-      blocks=cached.blocks;layoutGenerated=true;original=text;
+      blocks=layout.map((b,i)=>({...b,translation:cached.blocks[i].translation}));layoutGenerated=true;original=text;
     }
    }catch(_){/* Page-level translation remains available in the PDF overlay. */}
   }
@@ -793,8 +793,20 @@ async function render(url,title,root,token,citation=''){
    const blocks=[];
    for(const line of ordered){
     const last=blocks[blocks.length-1];
-    // Never merge index entries: each printed line is its own semantic unit.
-    if(!indexPage&&last&&Math.abs(line.x-last.x)<Math.max(24,last.font*3)&&line.y-last.bottom<Math.max(12,last.font*1.7)&&last.text.length+line.text.length<1000){
+    // Keep captions, graph sources, footnotes and page markers independent.
+    // Only merge lines in the SAME visual column with similar text metrics.
+    const gap=last?line.y-last.bottom:Infinity;
+    const overlap=last?Math.max(0,Math.min(last.right,line.right)-Math.max(last.x,line.x)):0;
+    const columnAgreement=last&&overlap>=0.6*Math.min(last.right-last.x,line.right-line.x);
+    const similarFont=last&&Math.abs(line.font-last.font)<=Math.max(1.4,last.font*.18);
+    const caption=/^(?:fig(?:ura)?\.?\s*\d|tab(?:ella)?\.?\s*\d|fonte\s*:|source\s*:|\d{1,3}$)/i;
+    const canJoin=Boolean(!indexPage&&last&&
+     !caption.test(last.text.trim())&&!caption.test(line.text.trim())&&
+     Math.abs(line.x-last.x)<=Math.max(14,last.font*1.45)&&
+     gap>=-Math.max(2,last.font*.22)&&gap<=Math.max(10,last.font*1.25)&&
+     columnAgreement&&similarFont&&
+     last.text.length+line.text.length<900);
+    if(canJoin){
      last.text+=' '+line.text;last.right=Math.max(last.right,line.right);last.bottom=Math.max(last.bottom,line.bottom);
     }else blocks.push({...line});
    }
@@ -964,7 +976,7 @@ async function render(url,title,root,token,citation=''){
     if(cached&&Array.isArray(cached.blocks)&&cached.blocks.length===blocks.length&&
        cached.blocks.every((b,i)=>b.original===blocks[i].original&&
         typeof b.translation==='string'&&b.translation.trim())){
-      translated=cached.blocks;
+      translated=blocks.map((b,i)=>({...b,translation:cached.blocks[i].translation}));
     }else{
       translated=[];
       for(let i=0;i<blocks.length;i++){
