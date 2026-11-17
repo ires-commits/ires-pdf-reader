@@ -51,17 +51,37 @@ async function render(url,title,root,token,citation=''){
     typeof block.translation==='string'&&block.translation.trim()&&
     ['x','y','width','height','fontSize'].every(k=>Number.isFinite(Number(block[k])))&&
     Number(block.width)>0&&Number(block.height)>0&&Number(block.fontSize)>0));
-  const blocks=verified?rows.map(block=>({
+  let blocks=verified?rows.map(block=>({
     x:Number(block.x),y:Number(block.y),
     width:Number(block.width),height:Number(block.height),
     fontSize:Number(block.fontSize),
     original:String(block.original||''),translation:String(block.translation),
     alignmentStatus:block.alignmentStatus
   })):[];
+  let layoutGenerated=false;
+  let original=rows.map(b=>String(b.original||'')).join(' ');
+  // PDF-bound per-paragraph overlays previously approved by an explicit reader
+  // action are cached by PDF fingerprint and exact source text. They are reused
+  // on future visits without another AI call.
+  if(!verified){
+   try{
+    const pdfPage=await doc.getPage(number);
+    const items=(await pdfPage.getTextContent()).items.filter(item=>item.str&&item.str.trim());
+    const text=items.map(item=>item.str).join(' ');
+    const key=await translationStorageKey(number,target,'layout-v2:'+text);
+    const cached=key?(await storedTranslation(key)||await sharedTranslation(key)):null;
+    const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
+    if(cached&&Array.isArray(cached.blocks)&&cached.blocks.length===layout.length&&
+       cached.blocks.length>0&&cached.blocks.every((b,i)=>
+         b.original===layout[i].original&&typeof b.translation==='string'&&b.translation.trim()&&
+         ['x','y','width','height','fontSize'].every(k=>Number.isFinite(Number(b[k]))))){
+      blocks=cached.blocks;layoutGenerated=true;original=text;
+    }
+   }catch(_){/* Page-level translation remains available in the PDF overlay. */}
+  }
   return {
-    scientific:true,verifiedOverlay:verified,blocks,
-    scientificText:translated,translation:translated,
-    original:rows.map(b=>String(b.original||'')).join(' ')
+    scientific:true,verifiedOverlay:verified,layoutGenerated,blocks,
+    scientificText:translated,translation:translated,original
   };
  }
  const browserLang=(navigator.languages&&navigator.languages[0]||navigator.language||'it').toLowerCase().split('-')[0];
@@ -732,6 +752,8 @@ async function render(url,title,root,token,citation=''){
    pt:'Esta página contém tabelas. A tradução sobreposta está desativada para preservar linhas, colunas e valores.'
   };
   const tableProtectedPages=new Set();
+  const pageOverlayCollapsed=new Set();
+  const inlineOverlayBusy=new Set();
   function showTableProtection(){
    root.querySelectorAll('.ires-pdf-table-protection').forEach(n=>n.remove());
    if(!translationMode||!tableProtectedPages.has(visiblePageForTranslation()))return;
@@ -872,6 +894,108 @@ async function render(url,title,root,token,citation=''){
    }
    root.append(loading);
   }
+  // An untranslated PDF must remain visible: a page-bound panel is the safe
+  // fallback for a saved full-page translation whose passages have not yet
+  // been reconciled to PDF.js text geometry. It is NOT an invented inline match.
+  function pageTranslationPanel(holder,number,entry){
+   const panel=el('section','ires-pdf-page-translation-overlay');
+   panel.setAttribute('role','region');
+   panel.setAttribute('aria-label','Traduzione inglese della pagina '+number);
+   if(pageOverlayCollapsed.has(number))panel.classList.add('is-collapsed');
+   const header=el('div','ires-pdf-page-translation-header');
+   const title=el('strong','',language.value.toUpperCase()+' · '+t(6)+' '+number);
+   const collapse=el('button','ires-pdf-page-translation-collapse',
+    pageOverlayCollapsed.has(number)?'+':'−');
+   collapse.type='button';
+   collapse.setAttribute('aria-label',pageOverlayCollapsed.has(number)?'Espandi traduzione':'Riduci traduzione');
+   collapse.onclick=()=>{
+    const folded=panel.classList.toggle('is-collapsed');
+    if(folded)pageOverlayCollapsed.add(number);else pageOverlayCollapsed.delete(number);
+    collapse.textContent=folded?'+':'−';
+    collapse.setAttribute('aria-label',folded?'Espandi traduzione':'Riduci traduzione');
+   };
+   header.append(title,collapse);
+   const detail=el('p','ires-pdf-page-translation-detail',
+    'Traduzione sulla pagina originale · allineamento dei singoli paragrafi non ancora disponibile');
+   const body=el('div','ires-pdf-page-translation-body');
+   const copy=el('div','ires-pdf-page-translation-copy',
+    entry.scientificText||entry.translation||'');
+   body.append(detail,copy);
+   if(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated){
+    const inline=el('button','ires-pdf-page-translation-inline',
+      inlineOverlayBusy.has(number)?'Preparazione nel layout…':'Traduci nei blocchi del PDF');
+    inline.type='button';
+    inline.disabled=inlineOverlayBusy.has(number);
+    inline.title='Traduce i singoli blocchi per associarli alle posizioni originali. Richiede un esplicito avvio.';
+    inline.onclick=async()=>{
+      if(config.translationAiPilot&&!window.confirm(
+        'La traduzione dei singoli blocchi può utilizzare Gemini e comportare costi API. Continuare per questa sola pagina?'))return;
+      inline.disabled=true;
+      try{await prepareInlineOverlay(number,inline);}
+      catch(err){
+       translationStatus.textContent='Overlay pagina '+number+': '+(err.message||'non disponibile');
+       inline.textContent='Riprova la traduzione nel layout';
+      }finally{inline.disabled=false;}
+    };
+    body.append(inline);
+   }
+   panel.append(header,body);
+   holder.append(panel);
+  }
+  // Only activated by the visible per-page button. It translates the extracted
+  // PDF.js layout blocks separately, with exact original/position association;
+  // never guesses alignment of the existing full-page English translation.
+  async function prepareInlineOverlay(number,button){
+   if(inlineOverlayBusy.has(number))return;
+   inlineOverlayBusy.add(number);
+   const generation=translationGeneration,target=language.value;
+   const key=target+':'+number;
+   try{
+    if(!translationMode||target!=='en')throw Error('Attiva la traduzione in inglese');
+    const pdfPage=await doc.getPage(number);
+    const text=(await pdfPage.getTextContent()).items.filter(item=>item.str&&item.str.trim());
+    const view=pdfPage.getViewport({scale:1});
+    if(hasTabularLayout(text,view))
+      throw Error('Pagina con tabelle: manteniamo i dati originali e la traduzione a pagina');
+    const blocks=extractLayoutBlocks(text,view);
+    if(!blocks.length||blocks.length>220)
+      throw Error('Struttura troppo complessa per sovrapposizione automatica');
+    const original=text.map(item=>item.str).join(' ');
+    const storageKey=await translationStorageKey(number,target,'layout-v2:'+original);
+    let cached=storageKey?(await storedTranslation(storageKey)||await sharedTranslation(storageKey)):null;
+    let translated=null;
+    if(cached&&Array.isArray(cached.blocks)&&cached.blocks.length===blocks.length&&
+       cached.blocks.every((b,i)=>b.original===blocks[i].original&&
+        typeof b.translation==='string'&&b.translation.trim())){
+      translated=cached.blocks;
+    }else{
+      translated=[];
+      for(let i=0;i<blocks.length;i++){
+       if(!translationMode||translationGeneration!==generation||token!==session)
+        throw Error('Traduzione interrotta');
+       button.textContent='Blocchi del PDF '+(i+1)+'/'+blocks.length;
+       const translation=await translateLong(blocks[i].sourceText||blocks[i].original,target,generation);
+       translated.push({...blocks[i],translation});
+      }
+      if(storageKey){
+       const record={blocks:translated,original,
+        translation:translated.map(block=>block.translation).join('\n\n')};
+       await storedTranslation(storageKey,record);
+       sharedTranslation(storageKey,record).catch(()=>{});
+      }
+    }
+    if(!translationMode||translationGeneration!==generation||token!==session)
+     throw Error('Traduzione interrotta');
+    const previous=translationCache.get(key);
+    translationCache.set(key,{
+      ...(previous||{}),scientific:true,verifiedOverlay:false,layoutGenerated:true,
+      blocks:translated,original,scientificText:previous?.scientificText||previous?.translation||'',
+      translation:previous?.translation||translated.map(block=>block.translation).join('\n\n')
+    });
+    translationStatus.textContent='Pagina '+number+': testo inglese nei blocchi originali';
+    showOverlays();
+   }finally{inlineOverlayBusy.delete(number);}
+  }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
    showTableProtection();
@@ -881,31 +1005,20 @@ async function render(url,title,root,token,citation=''){
    }).map(({n})=>n):[page];
    for(const number of targetPages){
     const entry=translationCache.get(language.value+':'+number);
-    if(!entry||tableProtectedPages.has(number)||entry.tableRows)continue;
-    // Never render page-level translations over unrelated PDF.js fragments.
-    // If the saved page lacks verified block alignment, switch to reading mode.
-    if(entry.scientific&&!entry.verifiedOverlay){
-     if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation()){
-      setReadingMode(true);
-      return;
-     }
-     continue;
-    }
-    if(entry.tableRows){if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation())setReadingMode(true);continue;}
-    if(isComplexTranslationPage(entry.blocks)){
-     if(!readingMode&&!readingAutoOptOut&&number===visiblePageForTranslation()){
-      setReadingMode(true);
-      return;
-     }
-     continue;
-    }
+    if(!entry)continue;
     const holder=continuous?slots[number-1]:singlePage;
     if(!holder||!holder.querySelector('canvas'))continue;
+    if(entry.tableRows||(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated)){
+     pageTranslationPanel(holder,number,entry);
+     continue;
+    }
+    // Complex layouts remain inside their PDF. Exact block translations are
+    // scrollable if text expansion does not fit the original rectangle.
     for(const block of entry.blocks){
      const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
-     node.style.overflow='hidden';
+     node.style.overflow='auto';
      node.style.fontSize=Math.max(9,Math.min(15,block.fontSize*scale))+'px';
      node.title=block.original;holder.append(node);
     }
@@ -967,9 +1080,9 @@ async function render(url,title,root,token,citation=''){
         translatedText=saved.translation;
         translationSource.textContent=saved.original;
         translationResult.textContent=saved.translation;
-        translationStatus.textContent=saved.verifiedOverlay?
-         'Pagina '+number+': traduzione verificata sul PDF':
-         'Pagina '+number+': traduzione salvata · lettura ottimizzata';
+        translationStatus.textContent=saved.verifiedOverlay||saved.layoutGenerated?
+         'Pagina '+number+': testo tradotto nei blocchi del PDF':
+         'Pagina '+number+': traduzione sovrapposta al PDF (pagina intera)';
         showOverlays();
         continue;
        }
@@ -1009,7 +1122,8 @@ async function render(url,title,root,token,citation=''){
         sharedTranslation(storageKey,entry).catch(()=>{});
        }
        translationBusyPage=0;
-       if(number===visiblePageForTranslation())setReadingMode(true);
+       if(number===visiblePageForTranslation())translationStatus.textContent=
+        'Pagina '+number+': traduzione della tabella sovrapposta al PDF';
        showOverlays();
        continue;
       }
