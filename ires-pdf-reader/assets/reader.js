@@ -928,8 +928,8 @@ async function render(url,title,root,token,citation=''){
     inline.disabled=inlineOverlayBusy.has(number);
     inline.title='Traduce i singoli blocchi per associarli alle posizioni originali. Richiede un esplicito avvio.';
     inline.onclick=async()=>{
-      if(config.translationAiPilot&&!window.confirm(
-        'La traduzione dei singoli blocchi può utilizzare Gemini e comportare costi API. Continuare per questa sola pagina?'))return;
+      if((config.translationAiPilot||config.translationRemote)&&!window.confirm(
+        'La traduzione dei singoli blocchi può utilizzare un servizio esterno e comportare costi API. Procedere soltanto per questa pagina?'))return;
       inline.disabled=true;
       try{await prepareInlineOverlay(number,inline);}
       catch(err){
