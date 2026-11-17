@@ -868,7 +868,7 @@ async function render(url,title,root,token,citation=''){
    if(readingMode){renderReadingView();readingView.scrollTop=0;}else showOverlays();
   }
   readingToggle.onclick=()=>setReadingMode(!readingMode);
-  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay').forEach(node=>node.remove());}
+  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-page-translation-overlay').forEach(node=>node.remove());}
   function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
   function showTranslationLoading(){
    clearTranslationLoading();
