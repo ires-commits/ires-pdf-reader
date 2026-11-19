@@ -40,7 +40,7 @@ async function render(url,title,root,token,citation=''){
  // unaligned pages use the readable English version instead.
  // Prefer explicitly reviewed bilingual blocks over speculative per-line matching.
  // This GET never sends page text to an AI service.
- async function scientificApprovedOcr(number){
+ async function scientificApprovedOcr(doc,number){
   if(!scientificPublicationId||!config.scientificOcrApi||language.value!=='en')return null;
   try{
    const endpoint=new URL(config.scientificOcrApi,window.location.href);
@@ -77,9 +77,9 @@ async function render(url,title,root,token,citation=''){
     translation:blocks.map(b=>b.translation).join('\n\n')};
   }catch(_){return null;}
  }
- async function scientificStoredPage(number,target){
+ async function scientificStoredPage(doc,number,target){
   if(target!=='en'||!scientificPublicationId)return null;
-  const approvedOcr=await scientificApprovedOcr(number);
+  const approvedOcr=await scientificApprovedOcr(doc,number);
   if(approvedOcr)return approvedOcr;
   const geometry=await scientificGeometryPage(number);
   const savedText=geometry&&typeof geometry.readingTranslation==='string'?
@@ -1142,7 +1142,7 @@ async function render(url,title,root,token,citation=''){
       showTranslationLoading();
       translationStatus.textContent='Traduzione pagina '+number+'…';
       if(target==='en'){
-       const saved=await scientificStoredPage(number,target);
+       const saved=await scientificStoredPage(doc,number,target);
        if(!translationMode||generation!==translationGeneration||token!==session)break;
        if(number!==visiblePageForTranslation())continue;
        if(saved){
