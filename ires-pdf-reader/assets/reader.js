@@ -38,8 +38,49 @@ async function render(url,title,root,token,citation=''){
  // from PDF.js block geometry. Reuse both WITHOUT invoking any translation provider.
  // Only server-verified one-to-one blocks are safe for a position-based overlay;
  // unaligned pages use the readable English version instead.
+ // Prefer explicitly reviewed bilingual blocks over speculative per-line matching.
+ // This GET never sends page text to an AI service.
+ async function scientificApprovedOcr(number){
+  if(!scientificPublicationId||!config.scientificOcrApi||language.value!=='en')return null;
+  try{
+   const endpoint=new URL(config.scientificOcrApi,window.location.href);
+   endpoint.pathname=endpoint.pathname.replace(/\/$/,'')+'/'+scientificPublicationId+'/'+number;
+   const res=await fetch(endpoint.toString(),{credentials:'same-origin'});
+   if(!res.ok)return null;
+   const data=await res.json();
+   if(data.schemaVersion!==1||data.publicationId!==scientificPublicationId||
+      data.page!==number||data.language!=='en'||data.coordinateSystem!=='pdfjs-viewport-1'||
+      data.overlayAvailable!==true||data.verifiedByAdmin!==true||
+      !Array.isArray(data.blocks)||!data.blocks.length||data.blocks.length>250)return null;
+   const pg=await doc.getPage(number);
+   const view=pg.getViewport({scale:1});
+   const width=Number(data.pageWidth),height=Number(data.pageHeight);
+   if(!Number.isFinite(width)||!Number.isFinite(height)||
+      Math.abs(view.width-width)>1.5||Math.abs(view.height-height)>1.5)return null;
+   const ids=new Set();
+   const blocks=[];
+   for(const b of data.blocks){
+    const id=String(b.id||'');
+    if(!id||ids.has(id)||typeof b.original!=='string'||!b.original.trim()||
+       typeof b.translation!=='string'||!b.translation.trim())return null;
+    ids.add(id);
+    const coords=['x','y','width','height','fontSize'].map(k=>Number(b[k]));
+    if(!coords.every(Number.isFinite))return null;
+    const [x,y,w,h,fs]=coords;
+    if(x<0||y<0||w<2||h<2||fs<2||x+w>width+1||y+h>height+1)return null;
+    blocks.push({id,x,y,width:w,height:h,fontSize:fs,
+     original:b.original,translation:b.translation,kind:b.kind||'paragraph'});
+   }
+   return {scientific:true,ocrOverlay:true,verifiedOverlay:true,layoutGenerated:false,
+    blocks,original:blocks.map(b=>b.original).join('\n\n'),
+    scientificText:blocks.map(b=>b.translation).join('\n\n'),
+    translation:blocks.map(b=>b.translation).join('\n\n')};
+  }catch(_){return null;}
+ }
  async function scientificStoredPage(number,target){
   if(target!=='en'||!scientificPublicationId)return null;
+  const approvedOcr=await scientificApprovedOcr(number);
+  if(approvedOcr)return approvedOcr;
   const geometry=await scientificGeometryPage(number);
   const savedText=geometry&&typeof geometry.readingTranslation==='string'?
     geometry.readingTranslation.trim():'';
@@ -1023,22 +1064,34 @@ async function render(url,title,root,token,citation=''){
     }
     // Complex layouts remain inside their PDF. Exact block translations are
     // scrollable if text expansion does not fit the original rectangle.
+    let fitted=0,unfitted=0;
     for(const block of entry.blocks){
      const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
+     if(entry.ocrOverlay)node.classList.add('ires-pdf-translation-overlay-ocr');
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
-     node.style.overflow='auto';
-     const initialFont=Math.max(9,Math.min(17,block.fontSize*scale));
+     node.style.overflow=entry.ocrOverlay?'hidden':'auto';
+     const initialFont=entry.ocrOverlay?
+       Math.max(5.5,Math.min(19,block.fontSize*scale)):
+       Math.max(9,Math.min(17,block.fontSize*scale));
      node.style.fontSize=initialFont+'px';
      node.title=block.original;holder.append(node);
-     // Keep most translations readable without a nested scrollbar. English
-     // can be longer than Italian; shrink conservatively inside the exact box.
-     if(node.clientHeight>10&&node.scrollHeight>node.clientHeight+3){
-      for(const ratio of [.93,.86,.8]){
-       node.style.fontSize=Math.max(8,initialFont*ratio)+'px';
-       if(node.scrollHeight<=node.clientHeight+3)break;
+     // Native OCR source rectangles are small; scale font to fit, but never
+     // silently clip English text and falsely present a complete translation.
+     if(node.clientHeight>1&&node.scrollHeight>node.clientHeight+2){
+      const ratios=entry.ocrOverlay?[.94,.88,.82,.76,.7,.65]:[.93,.86,.8];
+      for(const ratio of ratios){
+       node.style.fontSize=Math.max(entry.ocrOverlay?5.5:8,initialFont*ratio)+'px';
+       if(node.scrollHeight<=node.clientHeight+2)break;
       }
      }
+     if(entry.ocrOverlay&&node.clientHeight>0&&node.scrollHeight>node.clientHeight+2){
+      node.remove();unfitted++;
+     }else fitted++;
+    }
+    if(entry.ocrOverlay&&number===visiblePageForTranslation()){
+     translationStatus.textContent='Overlay OCR pagina '+number+': '+fitted+'/'+entry.blocks.length+
+      ' blocchi inglesi'+(unfitted?' · '+unfitted+' non adatti, testo italiano conservato':'');
     }
    }
    showTranslationLoading();
@@ -1098,9 +1151,11 @@ async function render(url,title,root,token,citation=''){
         translatedText=saved.translation;
         translationSource.textContent=saved.original;
         translationResult.textContent=saved.translation;
-        translationStatus.textContent=saved.verifiedOverlay||saved.layoutGenerated?
-         'Pagina '+number+': testo tradotto nei blocchi del PDF':
-         'Pagina '+number+': traduzione pronta per il posizionamento nel PDF';
+        translationStatus.textContent=saved.ocrOverlay?
+         'Pagina '+number+': overlay OCR approvato · testo inglese nel PDF':
+         (saved.verifiedOverlay||saved.layoutGenerated?
+          'Pagina '+number+': testo tradotto nei blocchi del PDF':
+          'Pagina '+number+': traduzione pronta per il posizionamento nel PDF');
         showOverlays();
         continue;
        }
