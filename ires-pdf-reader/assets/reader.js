@@ -1068,6 +1068,7 @@ async function render(url,title,root,token,citation=''){
     for(const block of entry.blocks){
      const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
      if(entry.ocrOverlay)node.classList.add('ires-pdf-translation-overlay-ocr');
+     if(entry.ocrOverlay)node.dataset.kind=block.kind||'paragraph';
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
      node.style.overflow=entry.ocrOverlay?'hidden':'auto';
