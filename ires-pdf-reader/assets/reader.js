@@ -68,8 +68,33 @@ async function render(url,title,root,token,citation=''){
     if(!coords.every(Number.isFinite))return null;
     const [x,y,w,h,fs]=coords;
     if(x<0||y<0||w<2||h<2||fs<2||x+w>width+1||y+h>height+1)return null;
+    // An optional mask only hides the tiny source glyphs outside the source
+    // rectangle. Text position/size never changes. Reject unsafe masks.
+    let maskRect=null;
+    if(Object.prototype.hasOwnProperty.call(b,'maskRect')){
+     if(b.maskReviewed!==true||!b.maskRect||typeof b.maskRect!=='object')return null;
+     const m=['x','y','width','height'].map(k=>Number(b.maskRect[k]));
+     if(!m.every(Number.isFinite))return null;
+     const [mx,my,mw,mh]=m;
+     const pads=[x-mx,y-my,mx+mw-x-w,my+mh-y-h];
+     if(mx<0||my<0||mw<2||mh<2||mx+mw>width+.5||my+mh>height+.5||
+        pads.some(v=>v<-.01||v>4.5))return null;
+     maskRect={x:mx,y:my,width:mw,height:mh};
+    }
     blocks.push({id,x,y,width:w,height:h,fontSize:fs,
-     original:b.original,translation:b.translation,kind:b.kind||'paragraph'});
+     original:b.original,translation:b.translation,kind:b.kind||'paragraph',maskRect});
+   }
+   // Client-side second check: a mask cannot cover a neighbouring English
+   // text block. The server also validates this on import.
+   for(const a of blocks){
+    if(!a.maskRect)continue;
+    const m=a.maskRect;
+    for(const b of blocks){
+     if(b===a)continue;
+     const ox=Math.max(0,Math.min(m.x+m.width,b.x+b.width)-Math.max(m.x,b.x));
+     const oy=Math.max(0,Math.min(m.y+m.height,b.y+b.height)-Math.max(m.y,b.y));
+     if(ox*oy>.1)return null;
+    }
    }
    return {scientific:true,ocrOverlay:true,verifiedOverlay:true,layoutGenerated:false,
     blocks,original:blocks.map(b=>b.original).join('\n\n'),
@@ -1097,7 +1122,19 @@ async function render(url,title,root,token,citation=''){
      }
      if(entry.ocrOverlay&&node.clientHeight>0&&node.scrollHeight>node.clientHeight+2){
       node.remove();unfitted++;
-     }else fitted++;
+     }else{
+      // Insert the reviewer-approved, separate white source mask only after
+      // text has fitted. If it fails, the original PDF stays fully visible.
+      if(entry.ocrOverlay&&block.maskRect){
+       const mask=el('div','ires-pdf-translation-mask');
+       mask.style.left=block.maskRect.x*scale+'px';
+       mask.style.top=block.maskRect.y*scale+'px';
+       mask.style.width=block.maskRect.width*scale+'px';
+       mask.style.height=block.maskRect.height*scale+'px';
+       holder.append(mask);
+      }
+      fitted++;
+     }
     }
     if(entry.ocrOverlay&&number===visiblePageForTranslation()){
      translationStatus.textContent='Overlay OCR pagina '+number+': '+fitted+'/'+entry.blocks.length+
