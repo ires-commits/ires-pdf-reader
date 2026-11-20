@@ -40,6 +40,21 @@ async function load(data){
  assert.ok(accepted?.ocrOverlay,'Reviewed mask should render');
  assert.equal(accepted.blocks[0].x,68.5,'English text box must not move');
  assert.equal(accepted.blocks[0].maskRect.x,68,'Mask may extend left of text');
+ const styled=base();
+ styled.blocks[0].textColor='#0065b6';
+ styled.blocks[0].fontWeight=700;
+ const withStyles=await load(styled);
+ assert.equal(withStyles.blocks[0].textColor,'#0065b6','Trusted ink must be preserved');
+ assert.equal(withStyles.blocks[0].fontWeight,700,'Trusted weight must be preserved');
+ assert.equal((await load(base())).blocks[0].textColor,null,'Legacy style stays default');
+ const invalidColor=base();invalidColor.blocks[0].textColor='red; background:url(https://example.com)';
+ assert.equal(await load(invalidColor),null,'Unsafe CSS color must be rejected');
+ const invalidWeight=base();invalidWeight.blocks[0].fontWeight=999;
+ assert.equal(await load(invalidWeight),null,'Unsupported weight must be rejected');
+ assert.ok(source.includes('Math.min(72,block.fontSize*scale)'),
+  'OCR font ceiling must scale with source PDF at high zoom');
+ assert.ok(source.includes("node.style.setProperty('color',block.textColor,'important')"),
+  'Per-block approved colors must override legacy OCR defaults');
  const unreviewed=base();
  unreviewed.blocks[0].maskRect={x:68,y:36,width:297,height:9};
  assert.equal(await load(unreviewed),null,'Unreviewed mask must fail closed');
@@ -61,5 +76,5 @@ async function load(data){
  assert.equal(await load(wrong),null,'Wrong-page API data rejected');
  assert.ok(source.includes('holder.append(mask)')&&source.includes('node.remove();unfitted++'),
   'Mask must be appended only after English fit checking');
- console.log('PASS: legacy, reviewed masks, bounds, collisions, identity and fit gate');
+ console.log('PASS: legacy, masks, color/weight whitelist, zoom and fit gate');
 })().catch(e=>{console.error(e);process.exit(1);});
