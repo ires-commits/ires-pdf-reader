@@ -68,8 +68,33 @@ async function render(url,title,root,token,citation=''){
     if(!coords.every(Number.isFinite))return null;
     const [x,y,w,h,fs]=coords;
     if(x<0||y<0||w<2||h<2||fs<2||x+w>width+1||y+h>height+1)return null;
+    // An optional mask only hides the tiny source glyphs outside the source
+    // rectangle. Text position/size never changes. Reject unsafe masks.
+    let maskRect=null;
+    if(Object.prototype.hasOwnProperty.call(b,'maskRect')){
+     if(b.maskReviewed!==true||!b.maskRect||typeof b.maskRect!=='object')return null;
+     const m=['x','y','width','height'].map(k=>Number(b.maskRect[k]));
+     if(!m.every(Number.isFinite))return null;
+     const [mx,my,mw,mh]=m;
+     const pads=[x-mx,y-my,mx+mw-x-w,my+mh-y-h];
+     if(mx<0||my<0||mw<2||mh<2||mx+mw>width+.5||my+mh>height+.5||
+        pads.some(v=>v<-.01||v>4.5))return null;
+     maskRect={x:mx,y:my,width:mw,height:mh};
+    }
     blocks.push({id,x,y,width:w,height:h,fontSize:fs,
-     original:b.original,translation:b.translation,kind:b.kind||'paragraph'});
+     original:b.original,translation:b.translation,kind:b.kind||'paragraph',maskRect});
+   }
+   // Client-side second check: a mask cannot cover a neighbouring English
+   // text block. The server also validates this on import.
+   for(const a of blocks){
+    if(!a.maskRect)continue;
+    const m=a.maskRect;
+    for(const b of blocks){
+     if(b===a)continue;
+     const ox=Math.max(0,Math.min(m.x+m.width,b.x+b.width)-Math.max(m.x,b.x));
+     const oy=Math.max(0,Math.min(m.y+m.height,b.y+b.height)-Math.max(m.y,b.y));
+     if(ox*oy>.1)return null;
+    }
    }
    return {scientific:true,ocrOverlay:true,verifiedOverlay:true,layoutGenerated:false,
     blocks,original:blocks.map(b=>b.original).join('\n\n'),
@@ -797,7 +822,11 @@ async function render(url,title,root,token,citation=''){
   const inlineOverlayBusy=new Set();
   function showTableProtection(){
    root.querySelectorAll('.ires-pdf-table-protection').forEach(n=>n.remove());
-   if(!translationMode||!tableProtectedPages.has(visiblePageForTranslation()))return;
+   const currentPage=visiblePageForTranslation();
+   if(!translationMode||!tableProtectedPages.has(currentPage))return;
+   // A newly approved and verified OCR overlay supersedes older table guards.
+   const approved=translationCache.get(language.value+':'+currentPage);
+   if(approved&&approved.ocrOverlay&&approved.verifiedOverlay)return;
    const banner=el('div','ires-pdf-table-protection',tableWarnings[uiLang]||tableWarnings.en);
    banner.setAttribute('role','status');
    workspace.append(banner);
@@ -985,11 +1014,16 @@ async function render(url,title,root,token,citation=''){
     };
     panel.append(inline);
    }
-   const reading=el('button','ires-pdf-page-translation-reading','Lettura alternativa');
-   reading.type='button';
-   reading.title='Apri la traduzione completa in modalità lettura, senza modificare il PDF';
-   reading.onclick=()=>{translationActivePage=number;setReadingMode(true);};
-   panel.append(reading);
+   // IRES Scientific publications remain on the PDF until a safe overlay is
+   // available. Do not offer a simplified reading view as a translation fallback.
+   // The reader's separate accessibility reading tools remain available.
+   if(!entry.scientific){
+    const reading=el('button','ires-pdf-page-translation-reading','Lettura alternativa');
+    reading.type='button';
+    reading.title='Apri la traduzione completa in modalità lettura, senza modificare il PDF';
+    reading.onclick=()=>{translationActivePage=number;setReadingMode(true);};
+    panel.append(reading);
+   }
    holder.append(panel);
   }
   // Only activated by the visible per-page button. It translates the extracted
@@ -1088,7 +1122,19 @@ async function render(url,title,root,token,citation=''){
      }
      if(entry.ocrOverlay&&node.clientHeight>0&&node.scrollHeight>node.clientHeight+2){
       node.remove();unfitted++;
-     }else fitted++;
+     }else{
+      // Insert the reviewer-approved, separate white source mask only after
+      // text has fitted. If it fails, the original PDF stays fully visible.
+      if(entry.ocrOverlay&&block.maskRect){
+       const mask=el('div','ires-pdf-translation-mask');
+       mask.style.left=block.maskRect.x*scale+'px';
+       mask.style.top=block.maskRect.y*scale+'px';
+       mask.style.width=block.maskRect.width*scale+'px';
+       mask.style.height=block.maskRect.height*scale+'px';
+       holder.append(mask);
+      }
+      fitted++;
+     }
     }
     if(entry.ocrOverlay&&number===visiblePageForTranslation()){
      translationStatus.textContent='Overlay OCR pagina '+number+': '+fitted+'/'+entry.blocks.length+
@@ -1134,8 +1180,9 @@ async function render(url,title,root,token,citation=''){
      if(number===null){translationPending.clear();break;}
      translationPending.delete(number);
      const key=target+':'+number;
-     if(tableProtectedPages.has(number)){showOverlays();continue;}
-    if(translationCache.has(key)){showOverlays();continue;}
+     // Check for a newly approved OCR overlay before honoring an earlier
+     // table-protection decision. The approved overlay has verified geometry.
+     if(translationCache.has(key)){showOverlays();continue;}
      try{
       translationBusyPage=number;
       translationProgress.set(key,0);
@@ -1147,6 +1194,7 @@ async function render(url,title,root,token,citation=''){
        if(number!==visiblePageForTranslation())continue;
        if(saved){
         translationCache.set(key,saved);
+        if(saved.ocrOverlay&&saved.verifiedOverlay)tableProtectedPages.delete(number);
         translationProgress.set(key,100);
         translationBusyPage=0;
         translatedText=saved.translation;
@@ -1161,6 +1209,7 @@ async function render(url,title,root,token,citation=''){
         continue;
        }
       }
+      if(tableProtectedPages.has(number)){translationBusyPage=0;showOverlays();continue;}
       const pdfPage=await doc.getPage(number);
       const content=await pdfPage.getTextContent();
       const items=content.items.filter(item=>item.str&&item.str.trim());

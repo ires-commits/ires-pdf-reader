@@ -26,6 +26,8 @@ jobs:
         run: find ires-pdf-reader -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Check JavaScript syntax
         run: node --check ires-pdf-reader/assets/reader.js
+      - name: Test reviewed OCR masks and legacy v1 compatibility
+        run: node tests/ocr-reviewed-mask-contract.cjs
       - name: Check package structure
         shell: bash
         run: |
