@@ -1,0 +1,38 @@
+name: OCR browser integration (actual Reader functions)
+on:
+  push:
+    branches: [feature/ocr-source-only-mask]
+    paths:
+      - 'tests/browser_ocr_integration.py'
+      - 'ires-pdf-reader/assets/reader.js'
+      - 'ires-pdf-reader/assets/reader.css'
+      - '.github/workflows/ocr-browser-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Chromium automation
+        run: |
+          python -m pip install --quiet 'playwright>=1.50,<1.70'
+          python -m playwright install --with-deps chromium
+      - name: Execute actual Reader parser and renderer at 4 zooms
+        run: python tests/browser_ocr_integration.py --source ires-pdf-reader/assets/reader.js --output ocr-browser-qa
+      - name: Upload visual evidence and machine-readable results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ires-reader-ocr-actual-function-browser-qa
+          path: |
+            ocr-browser-qa/result.json
+            ocr-browser-qa/ocr-100.png
+            ocr-browser-qa/ocr-200.png
+          retention-days: 30
+          if-no-files-found: warn
