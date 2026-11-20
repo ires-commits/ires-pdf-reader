@@ -1134,8 +1134,9 @@ async function render(url,title,root,token,citation=''){
      if(number===null){translationPending.clear();break;}
      translationPending.delete(number);
      const key=target+':'+number;
-     if(tableProtectedPages.has(number)){showOverlays();continue;}
-    if(translationCache.has(key)){showOverlays();continue;}
+     // Check for a newly approved OCR overlay before honoring an earlier
+     // table-protection decision. The approved overlay has verified geometry.
+     if(translationCache.has(key)){showOverlays();continue;}
      try{
       translationBusyPage=number;
       translationProgress.set(key,0);
@@ -1161,6 +1162,7 @@ async function render(url,title,root,token,citation=''){
         continue;
        }
       }
+      if(tableProtectedPages.has(number)){translationBusyPage=0;showOverlays();continue;}
       const pdfPage=await doc.getPage(number);
       const content=await pdfPage.getTextContent();
       const items=content.items.filter(item=>item.str&&item.str.trim());
