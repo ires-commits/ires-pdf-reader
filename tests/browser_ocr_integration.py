@@ -7,7 +7,9 @@ then exercises reviewed source-only masks at desktop/mobile sizes and 4 zooms.
 import argparse
 import json
 import shutil
+from io import BytesIO
 from pathlib import Path
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 def source_functions(source):
@@ -26,7 +28,7 @@ def record(legacy=False,reviewed=True):
        "x":70,"y":100,"width":240,"height":25,"fontSize":13,
        "textColor":"#0065b6","fontWeight":700},
       {"id":"cell","original":"Totale","translation":"Total","kind":"text",
-       "x":80,"y":156,"width":120,"height":20,"fontSize":10,
+       "x":80,"y":156,"width":175,"height":20,"fontSize":10,
        "maskRect":{"x":80,"y":156,"width":32,"height":16},
        "maskReviewed":reviewed,"maskMode":"source-only","maskFill":"#ffe699"}
     ]
@@ -79,6 +81,7 @@ def html(parser,renderer,scale,d):
     [150,192].forEach(y=>{ctx.beginPath();ctx.moveTo(70,y);ctx.lineTo(520,y);ctx.stroke()});
     ctx.fillStyle='#111';ctx.font='11px Arial';
     ctx.fillText('Totale',80,168);ctx.fillText('2025',264,168);
+    ctx.beginPath();ctx.moveTo(220,150);ctx.lineTo(220,192);ctx.stroke();
     (async()=>{
       const parsed=await scientificApprovedOcr(doc,22);
       if(parsed){translationCache.set('en:22',parsed);showOverlays()}
@@ -127,6 +130,15 @@ def main():
                 assert qa["sampledBackground"]=="rgb(255, 230, 153)",qa
                 checks.append({"zoom":scale,"viewport":width,**qa})
                 if width==1366 and scale in (1,2):
+                    # The composite screenshot (not just canvas) must retain
+                    # the native vertical gridline, numeric value and cell ink.
+                    image=Image.open(BytesIO(tab.locator('#slot').screenshot())).convert('RGB')
+                    original=Image.open(BytesIO(tab.locator('canvas').screenshot())).convert('RGB')
+                    protected=[(219,178,222,190), (260,155,295,176), (140,180,175,189)]
+                    for roi in protected:
+                        scaled=tuple(round(z*scale) for z in roi)
+                        assert image.crop(scaled).tobytes()==original.crop(scaled).tobytes(), (
+                            'Protected grid, number or colour changed',scale,scaled)
                     tab.locator('#slot').screenshot(path=str(output/f'ocr-{round(scale*100)}.png'))
                 tab.close()
         for label,d,expect in [
