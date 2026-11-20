@@ -81,8 +81,20 @@ async function render(url,title,root,token,citation=''){
         pads.some(v=>v<-.01||v>4.5))return null;
      maskRect={x:mx,y:my,width:mw,height:mh};
     }
+    // Appearance is optional and must be validated by both WordPress and
+    // the Reader. Legacy OCR entries do not specify either field.
+    let textColor=null,fontWeight=null;
+    if(Object.prototype.hasOwnProperty.call(b,'textColor')){
+     if(typeof b.textColor!=='string'||!/^#[0-9a-f]{6}$/i.test(b.textColor))return null;
+     textColor=b.textColor;
+    }
+    if(Object.prototype.hasOwnProperty.call(b,'fontWeight')){
+     if(![400,600,700].includes(Number(b.fontWeight)))return null;
+     fontWeight=Number(b.fontWeight);
+    }
     blocks.push({id,x,y,width:w,height:h,fontSize:fs,
-     original:b.original,translation:b.translation,kind:b.kind||'paragraph',maskRect});
+     original:b.original,translation:b.translation,kind:b.kind||'paragraph',
+     maskRect,textColor,fontWeight});
    }
    // Client-side second check: a mask cannot cover a neighbouring English
    // text block. The server also validates this on import.
@@ -1106,10 +1118,18 @@ async function render(url,title,root,token,citation=''){
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
      node.style.overflow=entry.ocrOverlay?'hidden':'auto';
+     // OCR follows PDF zoom (unlike UI text). A 19px cap made 28pt
+     // chapter titles unreadably tiny at 150-200% zoom.
      const initialFont=entry.ocrOverlay?
-       Math.max(5.5,Math.min(19,block.fontSize*scale)):
+       Math.max(5.5,Math.min(72,block.fontSize*scale)):
        Math.max(9,Math.min(17,block.fontSize*scale));
      node.style.fontSize=initialFont+'px';
+     // These values arrive only after server and Reader whitelist checks.
+     // Existing stylesheet marks legacy ink/weight !important.
+     if(entry.ocrOverlay&&block.textColor)
+      node.style.setProperty('color',block.textColor,'important');
+     if(entry.ocrOverlay&&block.fontWeight)
+      node.style.setProperty('font-weight',String(block.fontWeight),'important');
      node.title=block.original;holder.append(node);
      // Native OCR source rectangles are small; scale font to fit, but never
      // silently clip English text and falsely present a complete translation.
