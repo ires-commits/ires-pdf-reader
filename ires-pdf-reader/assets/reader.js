@@ -100,9 +100,15 @@ async function render(url,title,root,token,citation=''){
      if(![400,600,700].includes(Number(b.fontWeight)))return null;
      fontWeight=Number(b.fontWeight);
     }
+    let maskFill=null;
+    if(Object.prototype.hasOwnProperty.call(b,'maskFill')){
+     if(maskMode!=='source-only'||!maskRect||
+        typeof b.maskFill!=='string'||!/^#[0-9a-f]{6}$/i.test(b.maskFill))return null;
+     maskFill=b.maskFill;
+    }
     blocks.push({id,x,y,width:w,height:h,fontSize:fs,
      original:b.original,translation:b.translation,kind:b.kind||'paragraph',
-     maskRect,maskMode,textColor,fontWeight});
+     maskRect,maskMode,maskFill,textColor,fontWeight});
    }
    // Client-side second check: a mask cannot cover a neighbouring English
    // text block. The server also validates this on import.
@@ -1160,6 +1166,7 @@ async function render(url,title,root,token,citation=''){
        mask.style.top=block.maskRect.y*scale+'px';
        mask.style.width=block.maskRect.width*scale+'px';
        mask.style.height=block.maskRect.height*scale+'px';
+       if(block.maskFill)mask.style.setProperty('background',block.maskFill,'important');
        holder.append(mask);
       }
       fitted++;
