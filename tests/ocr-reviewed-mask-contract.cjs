@@ -55,6 +55,33 @@ async function load(data){
   'OCR font ceiling must scale with source PDF at high zoom');
  assert.ok(source.includes("node.style.setProperty('color',block.textColor,'important')"),
   'Per-block approved colors must override legacy OCR defaults');
+ const sourceOnly=base();
+ sourceOnly.blocks[0].maskMode='source-only';
+ sourceOnly.blocks[0].maskRect={x:69,y:37.1,width:290,height:6.8};
+ sourceOnly.blocks[0].maskReviewed=true;
+ sourceOnly.blocks[0].maskFill='#ffe699';
+ const sourceParsed=await load(sourceOnly);
+ assert.ok(sourceParsed?.ocrOverlay,'Source-only mode may have smaller white mask');
+ assert.equal(sourceParsed.blocks[0].maskMode,'source-only');
+ assert.equal(sourceParsed.blocks[0].maskFill,'#ffe699');
+ const badSource=base();
+ badSource.blocks[0].maskMode='source-only';
+ badSource.blocks[0].maskRect={x:65,y:30,width:302,height:12};
+ badSource.blocks[0].maskReviewed=true;
+ assert.equal(await load(badSource),null,'Source mask outside translated box must fail');
+ const badBackground=base();
+ badBackground.blocks[0].maskMode='source-only';
+ badBackground.blocks[0].maskRect={x:69,y:37.1,width:290,height:6.8};
+ badBackground.blocks[0].maskReviewed=true;
+ badBackground.blocks[0].maskFill='red;filter:url(https://evil.example/)';
+ assert.equal(await load(badBackground),null,'Arbitrary CSS background rejected');
+ const noRect=base();
+ noRect.blocks[0].maskMode='source-only';
+ assert.equal(await load(noRect),null,'Source-only requires explicit reviewed rectangle');
+ assert.ok(source.includes("node.dataset.maskMode='source-only'"),
+   'Transparent source-only text behavior is applied when rendering');
+ assert.ok(source.includes("mask.style.setProperty('background',block.maskFill,'important')"),
+   'Validated sampled mask fill must be used at render time');
  const unreviewed=base();
  unreviewed.blocks[0].maskRect={x:68,y:36,width:297,height:9};
  assert.equal(await load(unreviewed),null,'Unreviewed mask must fail closed');

@@ -70,15 +70,23 @@ async function render(url,title,root,token,citation=''){
     if(x<0||y<0||w<2||h<2||fs<2||x+w>width+1||y+h>height+1)return null;
     // An optional mask only hides the tiny source glyphs outside the source
     // rectangle. Text position/size never changes. Reject unsafe masks.
-    let maskRect=null;
+    let maskRect=null,maskMode='cover-translation';
+    if(Object.prototype.hasOwnProperty.call(b,'maskMode')){
+     if(b.maskMode!=='source-only'&&b.maskMode!=='cover-translation')return null;
+     maskMode=b.maskMode;
+     if(maskMode==='source-only'&&!Object.prototype.hasOwnProperty.call(b,'maskRect'))return null;
+    }
     if(Object.prototype.hasOwnProperty.call(b,'maskRect')){
      if(b.maskReviewed!==true||!b.maskRect||typeof b.maskRect!=='object')return null;
      const m=['x','y','width','height'].map(k=>Number(b.maskRect[k]));
      if(!m.every(Number.isFinite))return null;
      const [mx,my,mw,mh]=m;
      const pads=[x-mx,y-my,mx+mw-x-w,my+mh-y-h];
+     const insideSource=mx>=x-.65&&my>=y-.65&&
+       mx+mw<=x+w+.65&&my+mh<=y+h+.65;
      if(mx<0||my<0||mw<2||mh<2||mx+mw>width+.5||my+mh>height+.5||
-        pads.some(v=>v<-.01||v>4.5))return null;
+        (maskMode==='source-only'&&!insideSource)||
+        (maskMode!=='source-only'&&pads.some(v=>v<-.01||v>4.5)))return null;
      maskRect={x:mx,y:my,width:mw,height:mh};
     }
     // Appearance is optional and must be validated by both WordPress and
@@ -92,9 +100,15 @@ async function render(url,title,root,token,citation=''){
      if(![400,600,700].includes(Number(b.fontWeight)))return null;
      fontWeight=Number(b.fontWeight);
     }
+    let maskFill=null;
+    if(Object.prototype.hasOwnProperty.call(b,'maskFill')){
+     if(maskMode!=='source-only'||!maskRect||
+        typeof b.maskFill!=='string'||!/^#[0-9a-f]{6}$/i.test(b.maskFill))return null;
+     maskFill=b.maskFill;
+    }
     blocks.push({id,x,y,width:w,height:h,fontSize:fs,
      original:b.original,translation:b.translation,kind:b.kind||'paragraph',
-     maskRect,textColor,fontWeight});
+     maskRect,maskMode,maskFill,textColor,fontWeight});
    }
    // Client-side second check: a mask cannot cover a neighbouring English
    // text block. The server also validates this on import.
@@ -1115,6 +1129,7 @@ async function render(url,title,root,token,citation=''){
      const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
      if(entry.ocrOverlay)node.classList.add('ires-pdf-translation-overlay-ocr');
      if(entry.ocrOverlay)node.dataset.kind=block.kind||'paragraph';
+     if(entry.ocrOverlay&&block.maskMode==='source-only')node.dataset.maskMode='source-only';
      node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
      node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
      node.style.overflow=entry.ocrOverlay?'hidden':'auto';
@@ -1151,6 +1166,7 @@ async function render(url,title,root,token,citation=''){
        mask.style.top=block.maskRect.y*scale+'px';
        mask.style.width=block.maskRect.width*scale+'px';
        mask.style.height=block.maskRect.height*scale+'px';
+       if(block.maskFill)mask.style.setProperty('background',block.maskFill,'important');
        holder.append(mask);
       }
       fitted++;

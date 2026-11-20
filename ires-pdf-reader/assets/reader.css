@@ -487,3 +487,12 @@
  box-shadow:none!important;
  pointer-events:none!important;
 }
+
+/* Bilingual table cells: white out only the native glyph rectangle; English
+ * may occupy additional empty space without erasing table borders. */
+.ires-pdf-viewer .ires-pdf-translation-overlay-ocr[data-mask-mode="source-only"],
+.ires-pdf-dedicated-root .ires-pdf-translation-overlay-ocr[data-mask-mode="source-only"]{
+ background:transparent!important;
+ -webkit-backdrop-filter:none!important;
+ backdrop-filter:none!important;
+}
