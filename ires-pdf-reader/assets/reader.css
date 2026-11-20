@@ -472,3 +472,18 @@
 .ires-pdf-dedicated-root .ires-pdf-translation-overlay-ocr[data-kind="caption"]{
  font-weight:600!important;
 }
+
+/* OCR v1 review-gated native glyph masking. This white layer sits strictly
+ * behind the translated text and never changes text layout or the PDF canvas. */
+.ires-pdf-viewer .ires-pdf-translation-mask,
+.ires-pdf-dedicated-root .ires-pdf-translation-mask{
+ position:absolute!important;
+ z-index:8!important;
+ display:block!important;
+ box-sizing:border-box!important;
+ background:#fff!important;
+ border:0!important;
+ border-radius:0!important;
+ box-shadow:none!important;
+ pointer-events:none!important;
+}
