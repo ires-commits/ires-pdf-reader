@@ -797,7 +797,11 @@ async function render(url,title,root,token,citation=''){
   const inlineOverlayBusy=new Set();
   function showTableProtection(){
    root.querySelectorAll('.ires-pdf-table-protection').forEach(n=>n.remove());
-   if(!translationMode||!tableProtectedPages.has(visiblePageForTranslation()))return;
+   const currentPage=visiblePageForTranslation();
+   if(!translationMode||!tableProtectedPages.has(currentPage))return;
+   // A newly approved and verified OCR overlay supersedes older table guards.
+   const approved=translationCache.get(language.value+':'+currentPage);
+   if(approved&&approved.ocrOverlay&&approved.verifiedOverlay)return;
    const banner=el('div','ires-pdf-table-protection',tableWarnings[uiLang]||tableWarnings.en);
    banner.setAttribute('role','status');
    workspace.append(banner);
@@ -985,11 +989,16 @@ async function render(url,title,root,token,citation=''){
     };
     panel.append(inline);
    }
-   const reading=el('button','ires-pdf-page-translation-reading','Lettura alternativa');
-   reading.type='button';
-   reading.title='Apri la traduzione completa in modalità lettura, senza modificare il PDF';
-   reading.onclick=()=>{translationActivePage=number;setReadingMode(true);};
-   panel.append(reading);
+   // IRES Scientific publications remain on the PDF until a safe overlay is
+   // available. Do not offer a simplified reading view as a translation fallback.
+   // The reader's separate accessibility reading tools remain available.
+   if(!entry.scientific){
+    const reading=el('button','ires-pdf-page-translation-reading','Lettura alternativa');
+    reading.type='button';
+    reading.title='Apri la traduzione completa in modalità lettura, senza modificare il PDF';
+    reading.onclick=()=>{translationActivePage=number;setReadingMode(true);};
+    panel.append(reading);
+   }
    holder.append(panel);
   }
   // Only activated by the visible per-page button. It translates the extracted
@@ -1148,6 +1157,7 @@ async function render(url,title,root,token,citation=''){
        if(number!==visiblePageForTranslation())continue;
        if(saved){
         translationCache.set(key,saved);
+        if(saved.ocrOverlay&&saved.verifiedOverlay)tableProtectedPages.delete(number);
         translationProgress.set(key,100);
         translationBusyPage=0;
         translatedText=saved.translation;
