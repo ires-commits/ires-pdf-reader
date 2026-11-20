@@ -68,7 +68,19 @@ async function render(url,title,root,token,citation=''){
     if(!coords.every(Number.isFinite))return null;
     const [x,y,w,h,fs]=coords;
     if(x<0||y<0||w<2||h<2||fs<2||x+w>width+1||y+h>height+1)return null;
-    blocks.push({id,x,y,width:w,height:h,fontSize:fs,
+    let maskRects=null;
+    if(b.maskRects!==undefined){
+     if(!Array.isArray(b.maskRects)||!b.maskRects.length||b.maskRects.length>64)return null;
+     maskRects=[];
+     for(const mask of b.maskRects){
+      if(!mask||typeof mask!=='object')return null;
+      const [mx,my,mw,mh]=[mask.x,mask.y,mask.width,mask.height];
+      if(![mx,my,mw,mh].every(Number.isFinite)||mx<0||my<0||mw<=0||mh<=0||
+         mx+mw>view.width+1||my+mh>view.height+1)return null;
+      maskRects.push({x:mx,y:my,width:mw,height:mh});
+     }
+    }
+    blocks.push({id,x,y,width:w,height:h,fontSize:fs,maskRects,
      original:b.original,translation:b.translation,kind:b.kind||'paragraph'});
    }
    return {scientific:true,ocrOverlay:true,verifiedOverlay:true,layoutGenerated:false,
@@ -478,6 +490,8 @@ async function render(url,title,root,token,citation=''){
   async function paint(){
    const id=++renderId;
    const number=Math.min(doc.numPages,Math.max(1,Number(page)||1));page=number;current.value=String(number);
+   delete singlePage.dataset.page;
+   if(translationMode)clearOverlays();
    zoomLabel.textContent=Math.round(scale/1.2*100)+'%';
    const p=await doc.getPage(number);if(token!==session||id!==renderId)return;
    const vp=p.getViewport({scale:scale*window.devicePixelRatio});
@@ -485,7 +499,13 @@ async function render(url,title,root,token,citation=''){
    canvas.style.width=(vp.width/window.devicePixelRatio)+'px';canvas.style.height=(vp.height/window.devicePixelRatio)+'px';
    const context=canvas.getContext('2d');
    renderTask=p.render({canvasContext:context,viewport:vp});await renderTask.promise;
-   if(id===renderId&&token===session){singlePage.style.width=canvas.style.width;singlePage.style.height=canvas.style.height;addTextLayer(p,singlePage,p.getViewport({scale}),modeEpoch).catch(error=>console.warn('IRES PDF Reader text layer',error));}
+   if(id===renderId&&token===session&&!continuous&&page===number){
+    singlePage.style.width=canvas.style.width;
+    singlePage.style.height=canvas.style.height;
+    singlePage.dataset.page=String(number);
+    if(translationMode)queueVisibleTranslation();
+    addTextLayer(p,singlePage,p.getViewport({scale}),modeEpoch).catch(error=>console.warn('IRES PDF Reader text layer',error));
+   }
    if(id===renderId){bookmark.textContent=bookmarks.some(x=>x.page===number)?'★ Segnalibro':'☆ Segnalibro';try{localStorage.setItem(storageKey,String(number));}catch(_error){} thumbList.querySelectorAll('.ires-pdf-thumb').forEach((b,i)=>{b.classList.toggle('is-current',i+1===number);});}
    renderTask=null;
   }
@@ -921,7 +941,7 @@ async function render(url,title,root,token,citation=''){
    if(readingMode){renderReadingView();readingView.scrollTop=0;}else showOverlays();
   }
   readingToggle.onclick=()=>setReadingMode(!readingMode);
-  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
+  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-ocr-mask,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
   function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
   function showTranslationLoading(){
    clearTranslationLoading();
@@ -1046,6 +1066,12 @@ async function render(url,title,root,token,citation=''){
     showOverlays();
    }finally{inlineOverlayBusy.delete(number);}
   }
+  function positionOverlay(node,rect){
+   node.style.left=rect.x*scale+'px';
+   node.style.top=rect.y*scale+'px';
+   node.style.width=rect.width*scale+'px';
+   node.style.height=rect.height*scale+'px';
+  }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
    showTableProtection();
@@ -1057,7 +1083,7 @@ async function render(url,title,root,token,citation=''){
     const entry=translationCache.get(language.value+':'+number);
     if(!entry)continue;
     const holder=continuous?slots[number-1]:singlePage;
-    if(!holder||!holder.querySelector('canvas'))continue;
+    if(!holder||holder.dataset.page!==String(number)||!holder.querySelector('canvas'))continue;
     if(entry.tableRows||(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated)){
      pageTranslationPanel(holder,number,entry);
      continue;
@@ -1067,10 +1093,23 @@ async function render(url,title,root,token,citation=''){
     let fitted=0,unfitted=0;
     for(const block of entry.blocks){
      const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
-     if(entry.ocrOverlay)node.classList.add('ires-pdf-translation-overlay-ocr');
-     if(entry.ocrOverlay)node.dataset.kind=block.kind||'paragraph';
-     node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
-     node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
+     if(entry.ocrOverlay){
+      node.classList.add('ires-pdf-translation-overlay-ocr');
+      node.dataset.kind=block.kind||'paragraph';
+      if(block.maskRects)node.classList.add('ires-pdf-ocr-masked');
+      // Only split an index row when both languages end with the same reference.
+      const leader=/^\s*(.*?)\s*(?:\.\s*){5,}(\d+)\s*$/s;
+      const original=block.original.match(leader);
+      const translated=block.translation.match(/^\s*(.*?)\s*\.{2,}\s*(\d+)\s*$/s);
+      if(original&&translated&&original[2]===translated[2]){
+       node.classList.add('ires-pdf-ocr-index-row');
+       const dots=el('span','ires-pdf-ocr-index-leader');
+       dots.setAttribute('aria-hidden','true');
+       node.replaceChildren(el('span','ires-pdf-ocr-index-label',translated[1]),dots,
+        el('span','ires-pdf-ocr-index-number',original[2]));
+      }
+     }
+     positionOverlay(node,block);
      node.style.overflow=entry.ocrOverlay?'hidden':'auto';
      const initialFont=entry.ocrOverlay?
        Math.max(5.5,Math.min(19,block.fontSize*scale)):
@@ -1079,16 +1118,28 @@ async function render(url,title,root,token,citation=''){
      node.title=block.original;holder.append(node);
      // Native OCR source rectangles are small; scale font to fit, but never
      // silently clip English text and falsely present a complete translation.
-     if(node.clientHeight>1&&node.scrollHeight>node.clientHeight+2){
+     const overflows=()=>node.scrollHeight>node.clientHeight+2||
+       (entry.ocrOverlay&&node.scrollWidth>node.clientWidth+1);
+     if(node.clientHeight>1&&overflows()){
       const ratios=entry.ocrOverlay?[.94,.88,.82,.76,.7,.65]:[.93,.86,.8];
       for(const ratio of ratios){
        node.style.fontSize=Math.max(entry.ocrOverlay?5.5:8,initialFont*ratio)+'px';
-       if(node.scrollHeight<=node.clientHeight+2)break;
+       if(!overflows())break;
       }
      }
-     if(entry.ocrOverlay&&node.clientHeight>0&&node.scrollHeight>node.clientHeight+2){
+     if(entry.ocrOverlay&&node.clientHeight>0&&overflows()){
       node.remove();unfitted++;
-     }else fitted++;
+      continue;
+     }
+     if(block.maskRects){
+      for(const rect of block.maskRects){
+       const mask=el('div','ires-pdf-ocr-mask');
+       mask.setAttribute('aria-hidden','true');
+       positionOverlay(mask,rect);
+       holder.insertBefore(mask,node);
+      }
+     }
+     fitted++;
     }
     if(entry.ocrOverlay&&number===visiblePageForTranslation()){
      translationStatus.textContent='Overlay OCR pagina '+number+': '+fitted+'/'+entry.blocks.length+
@@ -1115,7 +1166,7 @@ async function render(url,title,root,token,citation=''){
    if(!translationMode||token!==session)return;
    const number=visiblePageForTranslation();
    translationActivePage=number;
-   if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent=t(6)+' '+number;}
+   if(translationCache.has(language.value+':'+number)){translationStatus.textContent=t(6)+' '+number;showOverlays();}
    // Strictly one active page: never queue adjacent or previously visible pages.
    translationPending.clear();
    const key=language.value+':'+number,failed=translationFailures.get(key);
