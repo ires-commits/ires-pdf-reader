@@ -472,3 +472,33 @@
 .ires-pdf-dedicated-root .ires-pdf-translation-overlay-ocr[data-kind="caption"]{
  font-weight:600!important;
 }
+
+
+/* Reviewed text masks are independent of the English text boxes. */
+.ires-pdf-viewer .ires-pdf-translation-overlay-ocr.ires-pdf-ocr-masked,
+.ires-pdf-dedicated-root .ires-pdf-translation-overlay-ocr.ires-pdf-ocr-masked{
+ background:transparent!important;
+}
+.ires-pdf-ocr-mask{
+ position:absolute;
+ z-index:8;
+ background:#fff;
+ pointer-events:none;
+}
+.ires-pdf-translation-overlay-ocr.ires-pdf-ocr-index-row{
+ display:flex;
+ align-items:baseline;
+ gap:.25em;
+}
+.ires-pdf-ocr-index-label,.ires-pdf-ocr-index-number{
+ flex:none;
+ white-space:nowrap;
+}
+.ires-pdf-ocr-index-leader{
+ flex:1 0 .5em;
+ border-bottom:1px dotted currentColor;
+}
+.ires-pdf-ocr-index-number{
+ text-align:right;
+ font-variant-numeric:tabular-nums;
+}
