@@ -21,7 +21,7 @@ jobs:
           python-version: '3.11'
       - name: Install Chromium automation
         run: |
-          python -m pip install --quiet 'playwright>=1.50,<1.70'
+          python -m pip install --quiet 'playwright>=1.50,<1.70' 'Pillow>=10,<13'
           python -m playwright install --with-deps chromium
       - name: Execute actual Reader parser and renderer at 4 zooms
         run: python tests/browser_ocr_integration.py --source ires-pdf-reader/assets/reader.js --output ocr-browser-qa
