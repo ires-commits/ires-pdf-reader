@@ -1,12 +1,4 @@
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const js=fs.readFileSync('ires-pdf-reader/assets/reader.js','utf8');
-const php=fs.readFileSync('ires-pdf-reader/ires-pdf-reader.php','utf8');
-const api=fs.readFileSync('ires-pdf-reader/includes/scientific-translations.php','utf8');
-assert.match(php,/scientificPublicationId'.*get_queried_object_id\(\)/,'WordPress must provide the publication identifier');
-assert.match(js,/serverPublicationId=Number\(config\.scientificPublicationId\)/,'Reader must read server publication identifier');
-assert.match(js,/scientificEnglishPage\(number\)/,'Reader must fetch stored translated text');
-assert.match(js,/if\(scientificPublicationId&&target==='en'\)/,'Stored publication must not trigger another automatic paid translation when absent');
-assert.match(js,/Leggi testo inglese salvato/,'Users must have an explicit readable English fallback');
-assert.match(api,/ires_ps_translated_pages/,'Reader must use Produzione Scientifica translated pages');
-console.log('PASS: verified scientific publication binding, stored translation and safe fallback');
+'use strict';
+// The former source-pattern contract is now covered by production-function tests.
+require('./scientific-reader-runtime.cjs');
+

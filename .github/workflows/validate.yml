@@ -24,6 +24,8 @@ jobs:
           grep -Fq "const VERSION='$VERSION';" ires-pdf-reader/ires-pdf-reader.php
       - name: Lint PHP
         run: find ires-pdf-reader -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Test scientific publication binding and server read-only
+        run: php tests/scientific-publication-binding.php
       - name: Check JavaScript syntax
         run: node --check ires-pdf-reader/assets/reader.js
       - name: Test scientific stored-translation Reader contract
@@ -37,3 +39,4 @@ jobs:
           zip -qr ires-pdf-reader.zip ires-pdf-reader
           unzip -t ires-pdf-reader.zip
           unzip -Z1 ires-pdf-reader.zip | grep -Fx 'ires-pdf-reader/ires-pdf-reader.php'
+

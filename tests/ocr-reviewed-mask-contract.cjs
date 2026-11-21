@@ -18,13 +18,13 @@ const base=()=>{
    original:'Source Italian',translation:'English text',kind:'heading'};
  const next={id:'p2',x:69,y:102.94,width:457.96,height:57.47,fontSize:10,
    original:'Source next',translation:'Next English text',kind:'paragraph'};
- return {schemaVersion:1,publicationId:95373,page:11,language:'en',
+ return {schemaVersion:1,publicationId:95373,page:11,language:'en',pdfHash:'a'.repeat(64),
    coordinateSystem:'pdfjs-viewport-1',pageWidth:594.96,pageHeight:842.04,
    overlayAvailable:true,verifiedByAdmin:true,blocks:[first,next]};
 };
 async function load(data){
  const sandbox={URL,config:{scientificOcrApi:'https://example.com/wp-json/ires-ps/v1/ocr-overlay'},
-  scientificPublicationId:95373,language:{value:'en'},
+  scientificPublicationId:95373,scientificPdfHash:'a'.repeat(64),url:'https://example.com/report.pdf',language:{value:'en'},
   window:{location:{href:'https://example.com/report'}},
   fetch:async()=>({ok:true,json:async()=>data}),mockDoc};
  return await vm.runInNewContext('(async()=>{ '+fn+'; return await scientificApprovedOcr(mockDoc,11); })()',sandbox);
@@ -98,6 +98,14 @@ async function load(data){
  overlapping.blocks[0].maskRect={x:68,y:36,width:297,height:10};
  overlapping.blocks[0].maskReviewed=true;
  assert.equal(await load(overlapping),null,'Masks over neighbouring text rejected');
+ const partial=base();partial.sourceBlocks=5;partial.partial=true;
+ const partialParsed=await load(partial);
+ assert.equal(partialParsed.partial,true,'Partial approval cannot be reported as complete page');
+ assert.equal(partialParsed.sourceBlocks,5);
+ const legacyCount=base();legacyCount.sourceBlocks=0;
+ assert.ok(await load(legacyCount),'Legacy rows with no stored source count stay valid');
+ const wrongHash=base();wrongHash.pdfHash='b'.repeat(64);
+ assert.equal(await load(wrongHash),null,'Wrong PDF hash rejected');
  const wrong=base();
  wrong.page=12;
  assert.equal(await load(wrong),null,'Wrong-page API data rejected');
@@ -105,3 +113,4 @@ async function load(data){
   'Mask must be appended only after English fit checking');
  console.log('PASS: legacy, masks, color/weight whitelist, zoom and fit gate');
 })().catch(e=>{console.error(e);process.exit(1);});
+

@@ -415,8 +415,10 @@
 }
 .ires-pdf-page-translation-prompt-title{font-size:12px;font-weight:750}
 .ires-pdf-page-translation-prompt-status{font-size:11px;color:#506c7d}
-.ires-pdf-page-translation-prompt button{
+.ires-pdf-page-translation-prompt button,
+.ires-pdf-page-translation-prompt a{
  display:block;width:100%;border-radius:7px;padding:8px 9px;
+ box-sizing:border-box;text-align:center;text-decoration:none;
  font:650 12px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;
  cursor:pointer;white-space:normal;
 }
@@ -439,7 +441,8 @@
   top:8px;right:8px;width:min(236px,77%);padding:8px;gap:5px;
   font-size:11px;
  }
- .ires-pdf-page-translation-prompt button{font-size:11px;padding:6px 7px}
+ .ires-pdf-page-translation-prompt button,
+ .ires-pdf-page-translation-prompt a{font-size:11px;padding:6px 7px}
 }
 
 
@@ -496,3 +499,4 @@
  -webkit-backdrop-filter:none!important;
  backdrop-filter:none!important;
 }
+
