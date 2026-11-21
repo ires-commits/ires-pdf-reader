@@ -11,6 +11,8 @@ final class IRES_PDF_Translation {
   ]);
  }
  static function translate($request){
+  if(get_option('ires_pdf_translation_read_only',false))
+   return new WP_Error('ires_translation_read_only','Sono abilitate soltanto le traduzioni già salvate',['status'=>403]);
   $provider=(string)get_option('ires_pdf_translation_provider','libretranslate');
   $api_key=(string)get_option('ires_pdf_translation_api_key','');
   if($provider==='gemini'&&!$api_key){
@@ -83,3 +85,4 @@ final class IRES_PDF_Translation {
   return rest_ensure_response(['translatedText'=>$translated]);
  }
 }
+

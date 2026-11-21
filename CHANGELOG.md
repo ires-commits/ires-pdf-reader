@@ -1,3 +1,12 @@
+## 2.14.15 — collegamento verificato tra PDF, traduzioni salvate e layout OCR
+
+- Pubblicazione verificata sul PDF effettivamente aperto: URL canonico sul server, SHA-256 dei byte caricati dal Reader, pagina e lingua negli endpoint. Un ID di un'altra pubblicazione non può produrre un overlay sul documento corrente.
+- ID preservato nei pulsanti, nei collegamenti a pagina intera e nella condivisione. I vecchi collegamenti recuperano l'associazione solo mediante una corrispondenza univoca con l'allegato principale.
+- Per le traduzioni scientifiche salvate, il comando amministrativo «Prepara layout OCR» apre la pagina corretta del laboratorio OCR, riutilizzando il testo salvato. Eliminata la rigenerazione dei singoli blocchi PDF.js e l'uso della vecchia cache come sostituto del layout revisionato.
+- Distinti «Testo tradotto salvato» e «Layout OCR da preparare o approvare». Gli overlay approvati rimangono prioritari; al ritorno dalla preparazione OCR il Reader controlla automaticamente attivazioni e disattivazioni.
+- L'opzione «Usa solo traduzioni salvate» è applicata sia nel browser sia nell'endpoint server; nessuna nuova chiamata al fornitore quando attiva.
+- Test di comportamento per associazioni, hash, riuso senza provider e controlli server; regressione OCR del renderer su PR.
+
 ## 2.14.5 — overlay da Produzione Scientifica
 - Lettura endpoint /wp-json/ires-ps/v1/translation-blocks/{publicationId}/{page}.
 - Overlay solo con overlayAvailable=true e blocchi verified, tradotti e geometricamente validi; coordinate PDF.js viewport scala 1, origine in alto a sinistra.
@@ -178,3 +187,4 @@
 - Integrazione automatica sperimentale con il tipo contenuto `pubblicazione`.
 - Controllo aggiornamenti tramite release pubbliche GitHub.
 - Pipeline GitHub Actions per creare lo ZIP delle release.
+

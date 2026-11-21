@@ -1,5 +1,11 @@
 name: OCR browser integration (actual Reader functions)
 on:
+  pull_request:
+    paths:
+      - 'tests/browser_ocr_integration.py'
+      - 'ires-pdf-reader/assets/reader.js'
+      - 'ires-pdf-reader/assets/reader.css'
+      - '.github/workflows/ocr-browser-qa.yml'
   push:
     branches: [feature/ocr-source-only-mask]
     paths:
@@ -36,3 +42,4 @@ jobs:
             ocr-browser-qa/ocr-200.png
           retention-days: 30
           if-no-files-found: warn
+

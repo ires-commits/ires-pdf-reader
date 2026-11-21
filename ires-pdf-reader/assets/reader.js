@@ -6,22 +6,64 @@ const config=window.iresPdfReader||{};
 function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;}
 function close(){stopSpeech();session++;if(!active)return;active.remove();active=null;document.body.style.overflow='';document.removeEventListener('keydown',keys);if(lastFocus&&lastFocus.focus)lastFocus.focus();}
 function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){const controls=[...active.querySelectorAll('a,button,input')].filter(x=>!x.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
+async function resolveScientificPublication(url,candidate){
+ if(!config.scientificPublicationApi)return null;
+ try{
+  const endpoint=new URL(config.scientificPublicationApi,window.location.href);
+  endpoint.searchParams.set('pdf_url',url);
+  endpoint.searchParams.set('publication_id',String(candidate||0));
+  const response=await fetch(endpoint.toString(),{credentials:'same-origin'});
+  if(!response.ok){
+   if(response.status===404)return null;
+   throw Error('Associazione del PDF non verificata');
+  }
+  const data=await response.json();
+  const id=Number(data.publication_id);
+  const requested=new URL(url,window.location.href),canonical=new URL(data.pdf_url,window.location.href);
+  requested.hash='';canonical.hash='';
+  if(!Number.isSafeInteger(id)||id<=0||(candidate&&id!==candidate)||
+     requested.href!==canonical.href||typeof data.pdf_hash!=='string'||
+     !/^[a-f0-9]{64}$/i.test(data.pdf_hash))throw Error('Il PDF non corrisponde alla pubblicazione');
+  return {id,pdfHash:data.pdf_hash.toLowerCase()};
+ }catch(error){return {error:true};}
+}
 async function render(url,title,root,token,citation=''){
  const publicationMatch=document.body.className.match(/(?:^|\s)postid-(\d+)(?:\s|$)/);
- // Custom WordPress scientific templates may omit the postid-N body class.
- // The queried publication ID comes from WordPress; do not infer it from a title.
+ // These are candidates only. The server must match the requested PDF, and
+ // its SHA-256 must match the actual bytes loaded by PDF.js before any overlay.
  const serverPublicationId=Number(config.scientificPublicationId)||0;
  const rootPublicationId=Number(root&&root.dataset&&root.dataset.publicationId)||0;
- const scientificPublicationId=serverPublicationId||rootPublicationId||(publicationMatch?Number(publicationMatch[1]):0);
+ const scientificCandidateId=rootPublicationId||serverPublicationId||(publicationMatch?Number(publicationMatch[1]):0);
+ let scientificPublicationId=0,scientificPdfHash='',scientificBindingError=false;
+ let scientificDocumentCheck=null;
+ const scientificBinding=resolveScientificPublication(url,scientificCandidateId).then(binding=>{
+  scientificBindingError=Boolean(binding&&binding.error);
+  if(binding&&!binding.error){scientificPublicationId=binding.id;scientificPdfHash=binding.pdfHash;}
+ });
+ async function verifyScientificDocument(doc){
+  await scientificBinding;
+  if(!scientificPublicationId)return false;
+  if(!scientificDocumentCheck)scientificDocumentCheck=(async()=>{
+   try{
+    const bytes=await doc.getData();
+    const digest=await crypto.subtle.digest('SHA-256',bytes);
+    const hash=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+    if(hash!==scientificPdfHash)throw Error('Versione PDF diversa');
+    return true;
+   }catch(_){scientificBindingError=true;return false;}
+  })();
+  return scientificDocumentCheck;
+ }
  async function scientificGeometryPage(number){
   if(!scientificPublicationId||!config.scientificBlocksApi||language.value!=='en')return null;
   try{
    const endpoint=new URL(config.scientificBlocksApi,window.location.href);
    endpoint.pathname=endpoint.pathname.replace(/\/$/,'')+'/'+scientificPublicationId+'/'+number;
+   endpoint.searchParams.set('pdf_url',url);
    const response=await fetch(endpoint.toString(),{credentials:'same-origin'});
    if(!response.ok)return null;
    const payload=await response.json();
-   if(payload.schemaVersion!==1||payload.coordinateSystem!=='pdfjs-viewport-1'||payload.publicationId!==scientificPublicationId||payload.page!==number)return null;
+   if(payload.schemaVersion!==1||payload.coordinateSystem!=='pdfjs-viewport-1'||payload.publicationId!==scientificPublicationId||payload.page!==number||payload.pdfHash!==scientificPdfHash)return null;
    return payload;
   }catch(_){return null;}
  }
@@ -30,12 +72,15 @@ async function render(url,title,root,token,citation=''){
   try{
    const endpoint=new URL(config.scientificTranslationApi,window.location.href);
    endpoint.searchParams.set('publication_id',String(scientificPublicationId));
+   endpoint.searchParams.set('pdf_url',url);
    endpoint.searchParams.set('page',String(number));
    endpoint.searchParams.set('language','en');
    const response=await fetch(endpoint.toString(),{credentials:'same-origin'});
    if(!response.ok)return null;
    const payload=await response.json();
-   return payload&&typeof payload.translation==='string'&&payload.translation.trim()?payload.translation:null;
+   return payload&&payload.publication_id===scientificPublicationId&&payload.page===number&&
+    payload.language==='en'&&payload.pdf_hash===scientificPdfHash&&
+    typeof payload.translation==='string'&&payload.translation.trim()?payload.translation:null;
   }catch(_){return null;}
  }
  // IRES Produzione Scientifica stores approved English page translations separately
@@ -49,11 +94,12 @@ async function render(url,title,root,token,citation=''){
   try{
    const endpoint=new URL(config.scientificOcrApi,window.location.href);
    endpoint.pathname=endpoint.pathname.replace(/\/$/,'')+'/'+scientificPublicationId+'/'+number;
+   endpoint.searchParams.set('pdf_url',url);
    const res=await fetch(endpoint.toString(),{credentials:'same-origin'});
    if(!res.ok)return null;
    const data=await res.json();
    if(data.schemaVersion!==1||data.publicationId!==scientificPublicationId||
-      data.page!==number||data.language!=='en'||data.coordinateSystem!=='pdfjs-viewport-1'||
+      data.page!==number||data.language!=='en'||data.pdfHash!==scientificPdfHash||data.coordinateSystem!=='pdfjs-viewport-1'||
       data.overlayAvailable!==true||data.verifiedByAdmin!==true||
       !Array.isArray(data.blocks)||!data.blocks.length||data.blocks.length>250)return null;
    const pg=await doc.getPage(number);
@@ -126,16 +172,25 @@ async function render(url,title,root,token,citation=''){
      if(ox*oy>.1)return null;
     }
    }
-   return {scientific:true,ocrOverlay:true,verifiedOverlay:true,layoutGenerated:false,
+   const sourceBlocks=data.sourceBlocks===undefined||data.sourceBlocks===0?blocks.length:Number(data.sourceBlocks);
+   if(!Number.isSafeInteger(sourceBlocks)||sourceBlocks<blocks.length||sourceBlocks>100000)return null;
+   const partial=data.partial===true||sourceBlocks>blocks.length;
+   return {scientific:true,ocrOverlay:true,verifiedOverlay:true,layoutGenerated:false,partial,sourceBlocks,
     blocks,original:blocks.map(b=>b.original).join('\n\n'),
     scientificText:blocks.map(b=>b.translation).join('\n\n'),
     translation:blocks.map(b=>b.translation).join('\n\n')};
   }catch(_){return null;}
  }
  async function scientificStoredPage(doc,number,target){
-  if(target!=='en'||!scientificPublicationId)return null;
+  if(target!=='en'||!(await verifyScientificDocument(doc)))return null;
   const approvedOcr=await scientificApprovedOcr(doc,number);
-  if(approvedOcr)return approvedOcr;
+  if(approvedOcr){
+   if(approvedOcr.partial){
+    const completeText=await scientificEnglishPage(number);
+    if(completeText){approvedOcr.scientificText=completeText;approvedOcr.translation=completeText;}
+   }
+   return approvedOcr;
+  }
   const geometry=await scientificGeometryPage(number);
   const savedText=geometry&&typeof geometry.readingTranslation==='string'?
     geometry.readingTranslation.trim():'';
@@ -154,27 +209,8 @@ async function render(url,title,root,token,citation=''){
     original:String(block.original||''),translation:String(block.translation),
     alignmentStatus:block.alignmentStatus
   })):[];
-  let layoutGenerated=false;
-  let original=rows.map(b=>String(b.original||'')).join(' ');
-  // PDF-bound per-paragraph overlays previously approved by an explicit reader
-  // action are cached by PDF fingerprint and exact source text. They are reused
-  // on future visits without another AI call.
-  if(!verified){
-   try{
-    const pdfPage=await doc.getPage(number);
-    const items=(await pdfPage.getTextContent()).items.filter(item=>item.str&&item.str.trim());
-    const text=items.map(item=>item.str).join(' ');
-    const key=await translationStorageKey(number,target,'layout-v2:'+text);
-    const cached=key?(await storedTranslation(key)||await sharedTranslation(key)):null;
-    const layout=extractLayoutBlocks(items,pdfPage.getViewport({scale:1}));
-    if(cached&&Array.isArray(cached.blocks)&&cached.blocks.length===layout.length&&
-       cached.blocks.length>0&&cached.blocks.every((b,i)=>
-         b.original===layout[i].original&&typeof b.translation==='string'&&b.translation.trim()&&
-         ['x','y','width','height','fontSize'].every(k=>Number.isFinite(Number(b[k]))))){
-      blocks=layout.map((b,i)=>({...b,translation:cached.blocks[i].translation}));layoutGenerated=true;original=text;
-    }
-   }catch(_){/* Page-level translation remains available in the PDF overlay. */}
-  }
+  const layoutGenerated=false;
+  const original=rows.map(b=>String(b.original||'')).join(' ');
   return {
     scientific:true,verifiedOverlay:verified,layoutGenerated,blocks,
     scientificText:translated,translation:translated,original
@@ -323,7 +359,7 @@ async function render(url,title,root,token,citation=''){
   if(!pdfjs)throw Error('PDF.js non caricato: verifica la risposta del file pdf.min.js');
   if(token!==session)return;
   pdfjs.GlobalWorkerOptions.workerSrc=config.workerUrl;
-  const task=pdfjs.getDocument({url:url});
+  const task=pdfjs.getDocument({url:url,isEvalSupported:false});
   const doc=await task.promise;if(token!==session){doc.destroy();return;}
   status.remove();total.textContent='/ '+doc.numPages;current.max=String(doc.numPages);
   const storageKey='ires-pdf-page:'+url;
@@ -746,6 +782,9 @@ async function render(url,title,root,token,citation=''){
   }
   async function translateText(text,target){
    if(target==='it')return text;
+   if(config.translationReadOnly)throw Error('Sono abilitate soltanto le traduzioni già salvate');
+   await scientificBinding;
+   if(scientificPublicationId||scientificCandidateId||scientificBindingError)throw Error('Per questa pubblicazione usa la traduzione salvata e il layout OCR');
    if(config.translationAiPilot)return translateAiPilot(text,target);
    if(localModels['it-'+target]){
     try{return await localTranslate(text,target);}
@@ -849,7 +888,6 @@ async function render(url,title,root,token,citation=''){
   };
   const tableProtectedPages=new Set();
   const pageOverlayCollapsed=new Set();
-  const inlineOverlayBusy=new Set();
   function showTableProtection(){
    root.querySelectorAll('.ires-pdf-table-protection').forEach(n=>n.remove());
    const currentPage=visiblePageForTranslation();
@@ -953,7 +991,7 @@ async function render(url,title,root,token,citation=''){
      node.title=cell.original;tr.append(node);
     });body.append(tr);});table.append(body);wrap.append(table);article.append(wrap);
    }else if(entry&&typeof entry.scientificText==='string'){
-    entry.scientificText.split(/\\n\\s*\\n/).filter(Boolean).forEach(paragraph=>article.append(el('p','',paragraph.trim())));
+    entry.scientificText.split(/\n\s*\n/).filter(Boolean).forEach(paragraph=>article.append(el('p','',paragraph.trim())));
    }else if(entry&&Array.isArray(entry.blocks)){
     entry.blocks.forEach((block,i)=>{
      const value=cleanTranslatedText(block.translation);
@@ -1017,32 +1055,19 @@ async function render(url,title,root,token,citation=''){
    panel.setAttribute('role','group');
    panel.setAttribute('aria-label','Traduzione della pagina '+number);
    const heading=el('span','ires-pdf-page-translation-prompt-title',
-    'EN · '+t(6)+' '+number+' · Traduzione disponibile');
+    'EN · '+t(6)+' '+number+' · Testo tradotto salvato');
    panel.append(heading);
    const status=el('span','ires-pdf-page-translation-prompt-status',
-    entry.tableRows?'Tabella: originale preservato':'Da posizionare nei paragrafi originali');
+    entry.tableRows?'Tabella: originale preservato':'Layout OCR da preparare o approvare');
    panel.append(status);
-   if(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated){
-    const inline=el('button','ires-pdf-page-translation-inline',
-     inlineOverlayBusy.has(number)?'Allineamento in corso…':'Mostra inglese nel testo del PDF');
-    inline.type='button';
-    inline.disabled=inlineOverlayBusy.has(number);
-    inline.setAttribute('aria-label','Traduci i blocchi della pagina '+number+' e posizionali sul PDF originale');
-    inline.title='Genera e memorizza la traduzione dei blocchi di testo della sola pagina, nel loro posizionamento PDF originale.';
-    inline.onclick=async()=>{
-     if((config.translationAiPilot||config.translationRemote)&&!window.confirm(
-      'La traduzione dei singoli blocchi può utilizzare un servizio esterno e comportare costi API. Procedere soltanto per questa pagina?'))return;
-     inline.disabled=true;
-     inline.textContent='Preparazione overlay…';
-     try{await prepareInlineOverlay(number,inline);}
-     catch(err){
-      const message=err&&err.message?err.message:'Non disponibile';
-      translationStatus.textContent='Pagina '+number+': '+message;
-      status.textContent=message;
-      inline.textContent='Riprova overlay nel PDF';
-     }finally{inline.disabled=false;}
-    };
-    panel.append(inline);
+   if(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated&&config.scientificOcrAdminUrl){
+    const prepare=el('a','ires-pdf-page-translation-inline','Prepara layout OCR');
+    const destination=new URL(config.scientificOcrAdminUrl,window.location.href);
+    destination.searchParams.set('publication_id',String(scientificPublicationId));
+    destination.searchParams.set('page_number',String(number));
+    prepare.href=destination.toString();prepare.target='_blank';prepare.rel='noopener';
+    prepare.title='Apri la preparazione OCR della pagina con il testo inglese già salvato';
+    panel.append(prepare);
    }
    // Until PDF geometry is reviewed, make the saved English text readable
    // without presenting it as a verified overlay on the original layout.
@@ -1060,60 +1085,6 @@ async function render(url,title,root,token,citation=''){
     panel.append(reading);
    }
    holder.append(panel);
-  }
-  // Only activated by the visible per-page button. It translates the extracted
-  // PDF.js layout blocks separately, with exact original/position association;
-  // never guesses alignment of the existing full-page English translation.
-  async function prepareInlineOverlay(number,button){
-   if(inlineOverlayBusy.has(number))return;
-   inlineOverlayBusy.add(number);
-   const generation=translationGeneration,target=language.value;
-   const key=target+':'+number;
-   try{
-    if(!translationMode||target!=='en')throw Error('Attiva la traduzione in inglese');
-    const pdfPage=await doc.getPage(number);
-    const text=(await pdfPage.getTextContent()).items.filter(item=>item.str&&item.str.trim());
-    const view=pdfPage.getViewport({scale:1});
-    if(hasTabularLayout(text,view))
-      throw Error('Pagina con tabelle: manteniamo i dati originali e la traduzione a pagina');
-    const blocks=extractLayoutBlocks(text,view);
-    if(!blocks.length||blocks.length>220)
-      throw Error('Struttura troppo complessa per sovrapposizione automatica');
-    const original=text.map(item=>item.str).join(' ');
-    const storageKey=await translationStorageKey(number,target,'layout-v2:'+original);
-    let cached=storageKey?(await storedTranslation(storageKey)||await sharedTranslation(storageKey)):null;
-    let translated=null;
-    if(cached&&Array.isArray(cached.blocks)&&cached.blocks.length===blocks.length&&
-       cached.blocks.every((b,i)=>b.original===blocks[i].original&&
-        typeof b.translation==='string'&&b.translation.trim())){
-      translated=blocks.map((b,i)=>({...b,translation:cached.blocks[i].translation}));
-    }else{
-      translated=[];
-      for(let i=0;i<blocks.length;i++){
-       if(!translationMode||translationGeneration!==generation||token!==session)
-        throw Error('Traduzione interrotta');
-       button.textContent='Blocchi del PDF '+(i+1)+'/'+blocks.length;
-       const translation=await translateLong(blocks[i].sourceText||blocks[i].original,target,generation);
-       translated.push({...blocks[i],translation});
-      }
-      if(storageKey){
-       const record={blocks:translated,original,
-        translation:translated.map(block=>block.translation).join('\n\n')};
-       await storedTranslation(storageKey,record);
-       sharedTranslation(storageKey,record).catch(()=>{});
-      }
-    }
-    if(!translationMode||translationGeneration!==generation||token!==session)
-     throw Error('Traduzione interrotta');
-    const previous=translationCache.get(key);
-    translationCache.set(key,{
-      ...(previous||{}),scientific:true,verifiedOverlay:false,layoutGenerated:true,
-      blocks:translated,original,scientificText:previous?.scientificText||previous?.translation||'',
-      translation:previous?.translation||translated.map(block=>block.translation).join('\n\n')
-    });
-    translationStatus.textContent='Pagina '+number+': testo inglese nei blocchi originali';
-    showOverlays();
-   }finally{inlineOverlayBusy.delete(number);}
   }
   function showOverlays(){
    clearOverlays();clearTranslationLoading();if(!translationMode)return;
@@ -1183,7 +1154,8 @@ async function render(url,title,root,token,citation=''){
     }
     if(entry.ocrOverlay&&number===visiblePageForTranslation()){
      translationStatus.textContent='Overlay OCR pagina '+number+': '+fitted+'/'+entry.blocks.length+
-      ' blocchi inglesi'+(unfitted?' · '+unfitted+' non adatti, testo italiano conservato':'');
+      ' blocchi inglesi'+(entry.partial?' · layout parziale ('+entry.blocks.length+' di '+entry.sourceBlocks+' blocchi)':'')+
+      (unfitted?' · '+unfitted+' non adatti, testo italiano conservato':'');
     }
    }
    showTranslationLoading();
@@ -1246,21 +1218,22 @@ async function render(url,title,root,token,citation=''){
         translationSource.textContent=saved.original;
         translationResult.textContent=saved.translation;
         translationStatus.textContent=saved.ocrOverlay?
-         'Pagina '+number+': overlay OCR approvato · testo inglese nel PDF':
+         'Pagina '+number+': overlay OCR '+(saved.partial?'parziale approvato':'approvato')+' · testo inglese nel PDF':
          (saved.verifiedOverlay||saved.layoutGenerated?
           'Pagina '+number+': testo tradotto nei blocchi del PDF':
-          'Pagina '+number+': traduzione pronta per il posizionamento nel PDF');
+          'Pagina '+number+': testo salvato · layout OCR da preparare o approvare');
         showOverlays();
         continue;
        }
       }
       // Existing IRES scientific translations must never silently trigger
       // new paid per-block Gemini calls when the stored version is unavailable.
-      if(scientificPublicationId&&target==='en'){
+      if((scientificPublicationId||scientificCandidateId||scientificBindingError)&&target==='en'){
        translationBusyPage=0;
        translationProgress.delete(key);
-       translationStatus.textContent='Pagina '+number+': traduzione salvata non disponibile o non verificata. Controllare Traduzioni AI; nessuna nuova chiamata al provider.';
-       translationFailures.set(key,{attempts:1,until:Date.now()+15000,message:'Testo inglese salvato non disponibile'});
+       const missing=scientificBindingError?'Il PDF aperto non corrisponde a una versione verificata della pubblicazione':'Testo inglese salvato non disponibile';
+       translationStatus.textContent='Pagina '+number+': '+missing;
+       translationFailures.set(key,{attempts:1,until:Date.now()+15000,message:missing});
        showOverlays();
        continue;
       }
@@ -1380,6 +1353,11 @@ async function render(url,title,root,token,citation=''){
    if(!enabled){clearOverlays();clearTranslationLoading();root.querySelectorAll('.ires-pdf-table-protection').forEach(n=>n.remove());translationStatus.textContent=t(1);}
    else {queueVisibleTranslation();}
   }
+  root.addEventListener('ires-pdf-check-layout',()=>{
+   if(token!==session||!translationMode||language.value!=='en'||!scientificPublicationId)return;
+   const number=visiblePageForTranslation(),key='en:'+number;
+   translationCache.delete(key);translationFailures.delete(key);queueVisibleTranslation();
+  });
   translate.onclick=()=>setTranslationMode(!translationMode);
   translateAgain.onclick=()=>{translationCache.delete(language.value+':'+visiblePageForTranslation());translationFailures.delete(language.value+':'+visiblePageForTranslation());if(!translationMode)setTranslationMode(true);else queueVisibleTranslation();};
   overlayToggle.onclick=()=>setTranslationMode(!translationMode);
@@ -1478,6 +1456,7 @@ async function render(url,title,root,token,citation=''){
    link.searchParams.set('ires_pdf_reader','1');
    link.searchParams.set('pdf',url);
    link.searchParams.set('title',title);
+   if(scientificPublicationId)link.searchParams.set('publication_id',String(scientificPublicationId));
    link.searchParams.set('ires_pdf_auto','1');
    const position=text?cachedPosition:null;
    const targetPage=position?position.page:page;
@@ -1659,6 +1638,7 @@ async function render(url,title,root,token,citation=''){
 function open(url,title,button){
  close();const token=++session;lastFocus=button||document.activeElement;
  const overlay=el('div','ires-pdf-overlay');overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label',title);
+ if(button&&button.dataset.publicationId)overlay.dataset.publicationId=button.dataset.publicationId;
  const bar=el('div','ires-pdf-toolbar');const heading=el('strong','',title);
  const download=el('a','','Scarica PDF');download.href=url;download.setAttribute('download','');
  const exit=el('button','ires-pdf-close','Chiudi');exit.type='button';exit.onclick=close;
@@ -1666,6 +1646,10 @@ function open(url,title,button){
  active=overlay;document.body.style.overflow='hidden';document.addEventListener('keydown',keys);exit.focus();
  render(url,title,overlay,token,button&&button.dataset.citation||'');
 }
+window.addEventListener('focus',()=>{
+ const root=active||document.querySelector('.ires-pdf-dedicated-root');
+ if(root)root.dispatchEvent(new Event('ires-pdf-check-layout'));
+});
 // IRES Produzione Scientifica 1.43.51 renders its Preview link in a PHP template,
 // outside the_content. Reuse that exact link and preserve its original href as fallback.
 document.addEventListener('click',e=>{
@@ -1708,3 +1692,4 @@ if(document.body.classList.contains('ires-pdf-dedicated')){
  if(root){const token=++session;render(root.dataset.pdf,root.dataset.title||'Documento PDF',root,token,root.dataset.citation||'');}
 }
 })();
+

@@ -36,7 +36,7 @@ def record(legacy=False,reviewed=True):
         blocks=[{"id":"v1","original":"Italian source","translation":"English source",
                  "x":70,"y":100,"width":300,"height":25,"fontSize":12,"kind":"heading"}]
     return {
-      "schemaVersion":1,"publicationId":95373,"page":22,"language":"en",
+      "schemaVersion":1,"publicationId":95373,"page":22,"language":"en","pdfHash":"a"*64,
       "coordinateSystem":"pdfjs-viewport-1","pageWidth":595,"pageHeight":842,
       "overlayAvailable":True,"verifiedByAdmin":True,"blocks":blocks
     }
@@ -57,6 +57,7 @@ def html(parser,renderer,scale,d):
     """
     script="""
     const data=__DATA__;
+    const scientificPdfHash='a'.repeat(64),url='https://example.com/report.pdf';
     const scientificPublicationId=95373,config={scientificOcrApi:'https://example.com/ocr'};
     const language={value:'en'},page=22,scale=__SCALE__;
     const doc={getPage:async()=>({getViewport:()=>({width:595,height:842})})};
@@ -162,3 +163,4 @@ def main():
 
 if __name__=='__main__':
     main()
+
