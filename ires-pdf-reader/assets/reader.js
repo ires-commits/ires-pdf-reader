@@ -8,7 +8,11 @@ function close(){stopSpeech();session++;if(!active)return;active.remove();active
 function keys(e){if(e.key==='Escape'){close();return;}if(e.key==='Tab'&&active){const controls=[...active.querySelectorAll('a,button,input')].filter(x=>!x.disabled);if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
 async function render(url,title,root,token,citation=''){
  const publicationMatch=document.body.className.match(/(?:^|\s)postid-(\d+)(?:\s|$)/);
- const scientificPublicationId=publicationMatch?Number(publicationMatch[1]):0;
+ // Custom WordPress scientific templates may omit the postid-N body class.
+ // The queried publication ID comes from WordPress; do not infer it from a title.
+ const serverPublicationId=Number(config.scientificPublicationId)||0;
+ const rootPublicationId=Number(root&&root.dataset&&root.dataset.publicationId)||0;
+ const scientificPublicationId=serverPublicationId||rootPublicationId||(publicationMatch?Number(publicationMatch[1]):0);
  async function scientificGeometryPage(number){
   if(!scientificPublicationId||!config.scientificBlocksApi||language.value!=='en')return null;
   try{
@@ -1040,9 +1044,14 @@ async function render(url,title,root,token,citation=''){
     };
     panel.append(inline);
    }
-   // IRES Scientific publications remain on the PDF until a safe overlay is
-   // available. Do not offer a simplified reading view as a translation fallback.
-   // The reader's separate accessibility reading tools remain available.
+   // Until PDF geometry is reviewed, make the saved English text readable
+   // without presenting it as a verified overlay on the original layout.
+   if(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated){
+    const readSaved=el('button','ires-pdf-page-translation-reading','Leggi testo inglese salvato');
+    readSaved.type='button';
+    readSaved.onclick=()=>{translationActivePage=number;setReadingMode(true);};
+    panel.append(readSaved);
+   }
    if(!entry.scientific){
     const reading=el('button','ires-pdf-page-translation-reading','Lettura alternativa');
     reading.type='button';
@@ -1244,6 +1253,16 @@ async function render(url,title,root,token,citation=''){
         showOverlays();
         continue;
        }
+      }
+      // Existing IRES scientific translations must never silently trigger
+      // new paid per-block Gemini calls when the stored version is unavailable.
+      if(scientificPublicationId&&target==='en'){
+       translationBusyPage=0;
+       translationProgress.delete(key);
+       translationStatus.textContent='Pagina '+number+': traduzione salvata non disponibile o non verificata. Controllare Traduzioni AI; nessuna nuova chiamata al provider.';
+       translationFailures.set(key,{attempts:1,until:Date.now()+15000,message:'Testo inglese salvato non disponibile'});
+       showOverlays();
+       continue;
       }
       if(tableProtectedPages.has(number)){translationBusyPage=0;showOverlays();continue;}
       const pdfPage=await doc.getPage(number);
