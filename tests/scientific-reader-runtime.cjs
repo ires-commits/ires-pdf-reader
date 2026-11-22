@@ -14,6 +14,7 @@ const readingPolicy=part('function scientificReadingAction(', 'async function re
 const pageNavigation=part('  function navigate(){', '  fullscreen.onclick=');
 const shareLink=part('  function pageUrl(text){', '  passage.onclick=');
 const selectedText=part('  function readSelection(){', '  function capturePosition(){');
+const selectionPosition=part('  function capturePosition(){', '  function selectedPassage(){');
 const readingMark=part('  function markReadingPassage(', '  function paintReadingPage(');
 const originalPassageJump=part('  function scrollToPdfLinkedPassage(', '  async function addTextLayer(');
 const readingSync=part('  function syncScientificReading(', '  function queueVisibleTranslation(');
@@ -151,6 +152,12 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  assert.equal(englishHash.get('rpara'),'1','English link identifies selected paragraph');
  assert.equal(englishHash.get('roff'),'18','English link identifies selected character offset');
  assert.equal(englishLink.searchParams.get('publication_id'),'95415');
+ const overlayLink=new URL(makeUrl({page:7,reading:true,rpara:0,roff:8},false,'English scholarship'));
+ const overlayHash=new URLSearchParams(overlayLink.hash.slice(1));
+ assert.equal(overlayHash.get('view'),'reading','Selected English overlay opens a verified English reading deep link');
+ assert.equal(overlayHash.get('page'),'7');
+ assert.equal(overlayHash.get('rpara'),'0');
+ assert.equal(overlayHash.get('roff'),'8');
 
  // The optimized reading selection remains selectable for links and citations.
  const readingSection={dataset:{page:'6'}},readingElement={closest:selector=>selector==='.ires-pdf-reading-page'?readingSection:null};
@@ -160,6 +167,25 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
   root:{contains:()=>true},readingMode:true
  });
  assert.equal(textSelection,'English scholarship excerpt','Text selection inside reading page is recognized');
+ const overlay={contains:()=>true,closest:selector=>selector==='[data-page]'?{dataset:{page:'7'}}:null};
+ const overlayElement={nodeType:1,closest:selector=>selector==='.ires-pdf-translation-overlay-ocr'?overlay:null};
+ const excerptRange={startContainer:overlayElement,endContainer:overlayElement,
+  toString:()=> 'English scholarship'};
+ const overlaySelection=await vm.runInNewContext(selectionPosition+';capturePosition()',{
+  window:{getSelection:()=>({isCollapsed:false,rangeCount:1,getRangeAt:()=>excerptRange})},
+  readingMode:false,translationMode:true,scientificPublicationId:95415,
+  translationCache:new Map([['en:7',{scientificText:'This is English scholarship for international students.'}]]),
+  page:7
+ });
+ assert.equal(overlaySelection.page,7);
+ assert.equal(overlaySelection.reading,true);
+ assert.equal(overlaySelection.rpara,0);
+ assert.equal(overlaySelection.roff,8,'Selected OCR overlay excerpt is mapped into saved English page');
+ const overlayTextSelected=vm.runInNewContext(selectedText+';readSelection()',{
+  window:{getSelection:()=>({isCollapsed:false,anchorNode:overlayElement,focusNode:overlayElement,toString:()=> 'English scholarship'})},
+  root:{contains:()=>true},readingMode:false,translationMode:true,scientificPublicationId:95415
+ });
+ assert.equal(overlayTextSelected,'English scholarship','Approved English PDF overlay is selectable for citations');
  let marked=null;
  const fakeArticle={querySelectorAll:()=>[{textContent:'A passage about English scholarship opportunities.',
   replaceChildren(...nodes){this.changed=nodes;marked=nodes[1];}}]};
