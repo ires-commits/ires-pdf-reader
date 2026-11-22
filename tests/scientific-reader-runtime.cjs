@@ -137,7 +137,7 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  const makeUrl=(position,reading,text)=>vm.runInNewContext(shareLink+';pageUrl(text)',{
   URL,config:{dedicatedUrl:'https://example.com/reader/'},location:{origin:'https://example.com'},
   url:sourceUrl,title:'Scientific publication',scientificPublicationId:95415,
-  cachedPosition:position,page:8,readingMode:reading,scientificReadingEnabled:()=>reading,text
+  cachedPosition:position,page:8,readingMode:reading,scientificReadingEnabled:()=>true,text
  });
  const oldLink=new URL(makeUrl({page:4,start:[3,7],end:[3,22]},false,'Italian source excerpt'));
  assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('page'),'4');
