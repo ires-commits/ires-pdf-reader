@@ -8,6 +8,9 @@ SOURCE = Path("ires-pdf-reader/assets/reader.js").read_text(encoding="utf-8")
 start = SOURCE.index("  // Scientific English reading is one scrollable document")
 end = SOURCE.index("  function renderReadingView(){", start)
 production = SOURCE[start:end]
+capture_start = SOURCE.index("  function capturePosition(){")
+capture_end = SOURCE.index("  function selectedPassage(){",capture_start)
+capture_position = SOURCE[capture_start:capture_end]
 css = """
 html,body{margin:0;background:#eaf0f4;font-family:Arial}
 #reading{box-sizing:border-box;width:800px;max-width:100vw;height:620px;overflow-y:auto;
@@ -56,10 +59,10 @@ window.__state=()=>({page,current:current.value,requested:window.__requests.slic
 def main():
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
-        page=p.chromium.launch if False else browser.new_page(viewport={"width": 960, "height": 800})
+        page=browser.new_page(viewport={"width": 960, "height": 800})
         try:
             page.set_content('<!doctype html><html><head><style>'+css+'</style></head><body><main id="reading"></main></body></html>')
-            page.evaluate(setup+"\n"+production+"\n"+suffix+"\nwindow.__start()")
+            page.evaluate(setup+"\n"+production+"\n"+capture_position+"\n"+suffix+"\nwindow.__start()")
             page.wait_for_function("document.querySelector('[data-page=\"6\"]').dataset.readingState==='ready'")
             page.wait_for_function("!!document.querySelector('.ires-pdf-reading-shared-target')")
             state=page.evaluate("window.__state()")
@@ -67,6 +70,13 @@ def main():
             assert set(state["requested"]) <= {5,6,7},state
             mark=page.locator(".ires-pdf-reading-shared-target").inner_text()
             assert mark=="Quote on page six",mark
+            selected=page.evaluate("""() => {
+              const target=document.querySelector('.ires-pdf-reading-shared-target').firstChild;
+              const range=document.createRange();range.setStart(target,0);range.setEnd(target,14);
+              const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+              return capturePosition();
+            }""")
+            assert selected["reading"] is True and selected["page"]==6 and selected["rpara"]==1 and selected["roff"]==0,selected
             assert page.locator(".ires-pdf-reading-page").count()==13
             page.evaluate("window.__jump(7)")
             page.wait_for_function("window.__state().page===7")
