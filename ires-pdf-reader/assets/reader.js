@@ -1224,6 +1224,7 @@ async function render(url,title,root,token,citation=''){
   }
   function setReadingMode(enabled,automatic=false){
    const previouslyReading=readingMode;
+   const reusedStack=!!(readingStack&&readingStack.isConnected);
    readingMode=Boolean(enabled&&translationMode);
    readingAutomatic=readingMode&&automatic===true;
    readingView.hidden=!readingMode;viewport.hidden=readingMode;
@@ -1233,7 +1234,9 @@ async function render(url,title,root,token,citation=''){
    if(readingMode){
     renderReadingView();
     if(scientificReadingEnabled()){
-     if(previouslyReading)jumpReadingPage(translationActivePage||page);
+     // A freshly built stack jumps in its first animation frame; an existing
+     // hidden stack must be realigned when reopened from another PDF page.
+     if(reusedStack&&!previouslyReading)jumpReadingPage(translationActivePage||page);
     }else if(!previouslyReading)readingView.scrollTop=0;
    }else{
     readingRenderedPage=0;readingRenderedEntry=null;
