@@ -261,7 +261,7 @@ async function render(url,title,root,token,citation=''){
  const share=el('button','','Condividi pagina');share.type='button';share.setAttribute('aria-label','Copia collegamento alla pagina corrente');
  toolbar.append(previous,current,total,next,minus,zoomLabel,plus,fit,share,search,find,prevMatch,nextMatch,searchInfo);
  const fullscreen=el('button','','Schermo intero');fullscreen.type='button';
- toolbar.prepend(mode,fullscreen);
+ toolbar.prepend(fullscreen);
  const sidebarToggle=el('button','','☰ Pagine');sidebarToggle.type='button';sidebarToggle.setAttribute('aria-expanded','false');sidebarToggle.setAttribute('aria-label','Mostra miniature e indice');
  toolbar.prepend(sidebarToggle);
  const navGroup=el('div','ires-pdf-tool-group ires-pdf-nav-group');
@@ -1029,7 +1029,7 @@ async function render(url,title,root,token,citation=''){
    if(!linkedViewReading||!linkedText||number!==fromHash)return null;
    const phrase=linkedText.trim();
    if(!phrase)return null;
-   const escaped=phrase.split(/\s+/).filter(Boolean).map(part=>part.replace(/[.*+?^{}()|[\]\\$]/g,'\\  function renderReadingView(){'));
+   const escaped=phrase.split(/\s+/).filter(Boolean).map(part=>part.replace(/[.*+?^{}()|[\]\\$]/g,'\\$&'));
    if(!escaped.length)return null;
    let pattern;
    try{pattern=new RegExp(escaped.join('\\s+'),'iu');}catch(_){return null;}
