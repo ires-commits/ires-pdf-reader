@@ -31,6 +31,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Execute actual Reader parser and renderer at 4 zooms
         run: python tests/browser_ocr_integration.py --source ires-pdf-reader/assets/reader.js --output ocr-browser-qa
+      - name: Verify continuous English scrolling, lazy loading and excerpt links
+        run: python tests/browser_continuous_reading.py
       - name: Upload visual evidence and machine-readable results
         uses: actions/upload-artifact@v4
         if: always()
@@ -40,6 +42,7 @@ jobs:
             ocr-browser-qa/result.json
             ocr-browser-qa/ocr-100.png
             ocr-browser-qa/ocr-200.png
+            /tmp/ires-reader-continuous-english.png
           retention-days: 30
           if-no-files-found: warn
 

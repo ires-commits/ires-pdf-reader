@@ -1,3 +1,12 @@
+## 2.14.17 — Scorrimento continuo e link precisi nelle traduzioni
+
+- Il Reader PDF usa esclusivamente lo scorrimento continuo: rimosso il pulsante «Singola», con navigazione nativa tramite rotellina, tocco, tastiera e i comandi precedente/successiva.
+- La lettura inglese ottimizzata delle pubblicazioni scientifiche è un documento scorrevole senza interruzioni: le pagine vengono caricate dal testo inglese già salvato in prossimità della visualizzazione, anche per rapporti lunghi.
+- Non passa automaticamente dal testo ottimizzato al PDF quando si incontra una pagina con overlay già approvato: l'utente può scegliere «Vista PDF» e ritrovare la pagina corrispondente con l'overlay.
+- Condivisione e citazioni: i collegamenti PDF già esistenti (#page, #text e coordinate start/end) restano compatibili e raggiungono il passaggio evidenziato; dai paragrafi inglesi si può creare un link diretto alla pagina e al testo selezionato, che apre la lettura inglese e lo evidenzia.
+- Anche il testo inglese selezionato in un overlay OCR approvato può generare link e citazioni, risolti sulla corrispondente traduzione salvata; gli ancoraggi inglesi contengono indice del paragrafo e offset per distinguere occorrenze ripetute.
+- Le letture scientifiche si caricano esclusivamente dal database locale verificato sul PDF aperto, senza chiamate di traduzione AI e senza attivare bozze o modificare testi archiviati.
+
 ## 2.14.16 — English integrale nel Reader per documenti scientifici
 
 - Una sola attivazione della traduzione inglese consente di consultare tutte le pagine scientifiche con testo inglese salvato, senza richiedere una conferma per pagina.

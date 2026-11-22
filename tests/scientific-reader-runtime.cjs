@@ -11,7 +11,12 @@ const verifier=part(' async function verifyScientificDocument(', ' async functio
 const reader=part(' async function scientificEnglishPage(', ' // IRES Produzione Scientifica stores');
 const stored=part(' async function scientificStoredPage(', ' const browserLang=');
 const readingPolicy=part('function scientificReadingAction(', 'async function render(');
-const pageNavigation=part('  function navigate(){', '  mode.onclick=');
+const pageNavigation=part('  function navigate(){', '  fullscreen.onclick=');
+const shareLink=part('  function pageUrl(text){', '  passage.onclick=');
+const selectedText=part('  function readSelection(){', '  function capturePosition(){');
+const selectionPosition=part('  function capturePosition(){', '  function selectedPassage(){');
+const readingMark=part('  function markReadingPassage(', '  function paintReadingPage(');
+const originalPassageJump=part('  function scrollToPdfLinkedPassage(', '  async function addTextLayer(');
 const readingSync=part('  function syncScientificReading(', '  function queueVisibleTranslation(');
 const translator=part('  async function translateText(', '  async function translateLong(');
 const panel=part('  function pageTranslationPanel(', '  function showOverlays(');
@@ -92,27 +97,119 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  assert.equal(decision(null,true),'pdf','Missing source returns to original PDF');
  let navigationCalls=[];
  const navigationState={translationMode:true,page:8,translationActivePage:7,readingMode:true,
-  readingAutoOptOut:true,readingView:{scrollTop:42},continuous:false,
-  renderReadingView:()=>navigationCalls.push('render'),
-  queueVisibleTranslation:()=>navigationCalls.push('fetch'),
-  schedule:()=>navigationCalls.push('pdf')};
+  readingAutoOptOut:true,scientificReadingEnabled:()=>true,
+  renderScientificReadingView:()=>navigationCalls.push('render'),
+  jumpReadingPage:(n)=>navigationCalls.push('scroll:'+n)};
  vm.runInNewContext(pageNavigation+';navigate()',navigationState);
- assert.equal(navigationState.translationActivePage,8,'Next page updates the active page while the PDF canvas is hidden');
- assert.equal(navigationState.readingAutoOptOut,false,'Opt-out lasts only for the current page');
- assert.equal(navigationState.readingView.scrollTop,0,'New English page starts at its beginning');
- assert.deepEqual(navigationCalls,['render','fetch','pdf'],'Reader navigation initiates the next saved English page');
+ assert.equal(navigationState.translationActivePage,8,'Next page updates current English reading page');
+ assert.equal(navigationState.readingAutoOptOut,false,'Next page restores automatic English handling');
+ assert.deepEqual(navigationCalls,['render','scroll:8'],'Navigation scrolls to English page 8 without switching to a hidden PDF');
  let modeCalls=[],status={textContent:''};
  const syncEnvironment={entry:unapproved,translationMode:true,language:{value:'en'},
   visiblePageForTranslation:()=>8,readingAutomatic:false,readingAutoOptOut:false,
-  readingMode:false,readingRenderedPage:0,readingRenderedEntry:null,translationStatus:status,
+  readingMode:false,readingStack:null,readingRenderedPage:0,readingRenderedEntry:null,translationStatus:status,
   setReadingMode:(enabled,auto)=>modeCalls.push([enabled,auto]),renderReadingView:()=>modeCalls.push('render')};
  vm.runInNewContext(readingPolicy+readingSync+';syncScientificReading(8,entry)',syncEnvironment);
  assert.deepEqual(modeCalls,[[true,true]],'Full saved English automatically opens in optimized reading view');
  modeCalls=[];
- Object.assign(syncEnvironment,{readingMode:true,readingAutomatic:true,entry:{...unapproved,verifiedOverlay:true,partial:false}});
+ Object.assign(syncEnvironment,{readingMode:true,readingAutomatic:true,readingStack:{isConnected:true},
+  entry:{...unapproved,verifiedOverlay:true,partial:false}});
  vm.runInNewContext(readingPolicy+readingSync+';syncScientificReading(8,entry)',syncEnvironment);
- assert.deepEqual(modeCalls,[[false,undefined]],'Reader automatically returns to PDF for a completely approved page');
+ assert.deepEqual(modeCalls,[],'Scrolling onto an approved page does not interrupt continuous English reading');
+ assert.equal(js.includes("viewGroup.append(sidebarToggle,fullscreen)"),true,'Only continuous PDF display is exposed');
+ assert.equal(js.includes('let continuous=true'),true,'Continuous PDF is the default');
+ assert.equal(js.includes('toolbar.prepend(mode,'),false,'Removed mode is not rendered in the toolbar');
+ assert.equal(js.includes('mode.textContent='),false,'No orphaned single-page mode label');
+ assert.equal(js.includes('mode.onclick='),false,'No orphaned single-page toggle handler');
+ const highlight={isConnected:true,getBoundingClientRect:()=>({top:400})};
+ const layer={closest:()=>({dataset:{page:'8'}}),querySelector:()=>highlight};
+ const pdfViewport={scrollTop:0,getBoundingClientRect:()=>({top:100,height:800})};
+ const jumpEnv={layer,linkedText:'Quoted original source',linkedViewReading:false,pdfLinkJumped:false,
+   fromHash:8,page:8,token:1,session:1,viewport:pdfViewport,
+   window:{requestAnimationFrame:callback=>callback()}};
+ vm.runInNewContext(originalPassageJump+';scrollToPdfLinkedPassage(layer)',jumpEnv);
+ assert.equal(jumpEnv.pdfLinkJumped,true,'Legacy exact PDF passage is handled');
+ assert.equal(pdfViewport.scrollTop,130,'Legacy PDF text highlight scrolls near viewport center');
  assert.equal(providerCalls,0,'Navigation and fallback do not call the translation provider');
+
+ // Legacy links retain page/text/source coordinates; new English excerpts carry
+ // view=reading while remaining bound to the same verified document.
+ const makeUrl=(position,reading,text)=>vm.runInNewContext(shareLink+';pageUrl(text)',{
+  URL,config:{dedicatedUrl:'https://example.com/reader/'},location:{origin:'https://example.com'},
+  url:sourceUrl,title:'Scientific publication',scientificPublicationId:95415,
+  cachedPosition:position,page:8,readingMode:reading,scientificReadingEnabled:()=>true,text
+ });
+ const oldLink=new URL(makeUrl({page:4,start:[3,7],end:[3,22]},false,'Italian source excerpt'));
+ assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('page'),'4');
+ assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('start'),'3,7');
+ assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('end'),'3,22');
+ assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('view'),null,'Legacy PDF links do not change');
+ const englishLink=new URL(makeUrl({page:6,reading:true,rpara:1,roff:18},true,'English scholarship excerpt'));
+ const englishHash=new URLSearchParams(englishLink.hash.slice(1));
+ assert.equal(englishHash.get('page'),'6');
+ assert.equal(englishHash.get('text'),'English scholarship excerpt');
+ assert.equal(englishHash.get('view'),'reading');
+ assert.equal(englishHash.get('lang'),'en');
+ assert.equal(englishHash.has('start'),false,'English excerpt does not forge original PDF text coordinates');
+ assert.equal(englishHash.get('rpara'),'1','English link identifies selected paragraph');
+ assert.equal(englishHash.get('roff'),'18','English link identifies selected character offset');
+ assert.equal(englishLink.searchParams.get('publication_id'),'95415');
+ const overlayLink=new URL(makeUrl({page:7,reading:true,rpara:0,roff:8},false,'English scholarship'));
+ const overlayHash=new URLSearchParams(overlayLink.hash.slice(1));
+ assert.equal(overlayHash.get('view'),'reading','Selected English overlay opens a verified English reading deep link');
+ assert.equal(overlayHash.get('page'),'7');
+ assert.equal(overlayHash.get('rpara'),'0');
+ assert.equal(overlayHash.get('roff'),'8');
+
+ // The optimized reading selection remains selectable for links and citations.
+ const readingSection={dataset:{page:'6'}},readingElement={closest:selector=>selector==='.ires-pdf-reading-page'?readingSection:null};
+ const textSelection=vm.runInNewContext(selectedText+';readSelection()',{
+  window:{getSelection:()=>({isCollapsed:false,anchorNode:{nodeType:3,parentElement:readingElement},
+   focusNode:{nodeType:3,parentElement:readingElement},toString:()=> 'English scholarship excerpt'})},
+  root:{contains:()=>true},readingMode:true,translationMode:false,scientificPublicationId:95415
+ });
+ assert.equal(textSelection,'English scholarship excerpt','Text selection inside reading page is recognized');
+ const overlay={contains:()=>true,closest:selector=>selector==='[data-page]'?{dataset:{page:'7'}}:null};
+ const overlayElement={nodeType:1,closest:selector=>selector==='.ires-pdf-translation-overlay-ocr'?overlay:null};
+ const excerptRange={startContainer:overlayElement,endContainer:overlayElement,
+  toString:()=> 'English scholarship'};
+ const overlaySelection=await vm.runInNewContext(selectionPosition+';capturePosition()',{
+  window:{getSelection:()=>({isCollapsed:false,rangeCount:1,getRangeAt:()=>excerptRange})},
+  readingMode:false,translationMode:true,scientificPublicationId:95415,
+  translationCache:new Map([['en:7',{scientificText:'This is English scholarship for international students.'}]]),
+  page:7
+ });
+ assert.equal(overlaySelection.page,7);
+ assert.equal(overlaySelection.reading,true);
+ assert.equal(overlaySelection.rpara,0);
+ assert.equal(overlaySelection.roff,8,'Selected OCR overlay excerpt is mapped into saved English page');
+ const overlayTextSelected=vm.runInNewContext(selectedText+';readSelection()',{
+  window:{getSelection:()=>({isCollapsed:false,anchorNode:overlayElement,focusNode:overlayElement,toString:()=> 'English scholarship'})},
+  root:{contains:()=>true},readingMode:false,translationMode:true,scientificPublicationId:95415
+ });
+ assert.equal(overlayTextSelected,'English scholarship','Approved English PDF overlay is selectable for citations');
+ let marked=null;
+ const fakeArticle={querySelectorAll:()=>[{textContent:'A passage about English scholarship opportunities.',
+  replaceChildren(...nodes){this.changed=nodes;marked=nodes[1];}}]};
+ const mark=vm.runInNewContext(readingMark+';markReadingPassage(article,6)',{
+  linkedViewReading:true,linkedText:'English scholarship',fromHash:6,linkedReadingPara:-1,linkedReadingOffset:-1,article:fakeArticle,
+  el:(tag,cls,txt)=>({tag,cls,textContent:txt})
+ });
+ assert.equal(mark.textContent,'English scholarship','English shared phrase is marked without HTML injection');
+ assert.equal(mark.cls,'ires-pdf-reading-shared-target');
+ let firstMarked=0,secondMarked=0;
+ const repeatingArticle={querySelectorAll:()=>[
+  {textContent:'Repeated English scholarship for students.',replaceChildren(){firstMarked++;}},
+  {textContent:'Repeated English scholarship for students.',replaceChildren(){secondMarked++;}}
+ ]};
+ const target2=vm.runInNewContext(readingMark+';markReadingPassage(article,6)',{
+  linkedViewReading:true,linkedText:'English scholarship',fromHash:6,
+  linkedReadingPara:1,linkedReadingOffset:9,article:repeatingArticle,
+  el:(tag,cls,txt)=>({tag,cls,textContent:txt})
+ });
+ assert.equal(target2.textContent,'English scholarship');
+ assert.equal(firstMarked,0,'First repeated occurrence not mistaken for the citation target');
+ assert.equal(secondMarked,1,'Saved paragraph offset targets the second repeated occurrence');
  for(const settings of [{translationReadOnly:true},{scientificPublicationId:95415},{scientificCandidateId:95415},{scientificBindingError:true}]){
   const env={...base,config:{...config,translationAiPilot:true,translationReadOnly:false},scientificPublicationId:0,scientificCandidateId:0,scientificBindingError:false,scientificBinding:Promise.resolve(),translateAiPilot:async()=>{providerCalls++;return 'Unexpected';}};
   for(const [key,value] of Object.entries(settings))if(key==='translationReadOnly')env.config[key]=value;else env[key]=value;
