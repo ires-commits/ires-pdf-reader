@@ -1,3 +1,12 @@
+## 2.14.16 — English integrale nel Reader per documenti scientifici
+
+- Una sola attivazione della traduzione inglese consente di consultare tutte le pagine scientifiche con testo inglese salvato, senza richiedere una conferma per pagina.
+- Se il layout OCR della pagina è approvato e completo, mostra l'inglese direttamente sul PDF originale, conservando grafica e coordinate.
+- Per le pagine senza layout approvato o con overlay parziale, passa automaticamente alla lettura inglese integrale salvata: non mostra una pagina mista italiano/inglese come se fosse completa.
+- Pagina precedente/successiva e selezione numero pagina funzionano anche in lettura inglese, aggiornando testo e posizione. Tornando su una pagina con overlay completo, il Reader ripristina il PDF automaticamente; una lettura esplicitamente scelta dall'utente resta invece attiva.
+- Il lettore può tornare all'originale per la pagina corrente; quando si cambia pagina l'automatismo torna disponibile. Un testo salvato mancante o non verificato non viene mostrato come traduzione completa.
+- Nessuna nuova chiamata AI, nessuna modifica alle traduzioni archiviate e nessuna approvazione automatica degli overlay.
+
 ## 2.14.15 — collegamento verificato tra PDF, traduzioni salvate e layout OCR
 
 - Pubblicazione verificata sul PDF effettivamente aperto: URL canonico sul server, SHA-256 dei byte caricati dal Reader, pagina e lingua negli endpoint. Un ID di un'altra pubblicazione non può produrre un overlay sul documento corrente.
