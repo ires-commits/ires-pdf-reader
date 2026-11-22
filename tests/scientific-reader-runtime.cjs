@@ -130,13 +130,15 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('start'),'3,7');
  assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('end'),'3,22');
  assert.equal(new URLSearchParams(oldLink.hash.slice(1)).get('view'),null,'Legacy PDF links do not change');
- const englishLink=new URL(makeUrl({page:6,reading:true},true,'English scholarship excerpt'));
+ const englishLink=new URL(makeUrl({page:6,reading:true,rpara:1,roff:18},true,'English scholarship excerpt'));
  const englishHash=new URLSearchParams(englishLink.hash.slice(1));
  assert.equal(englishHash.get('page'),'6');
  assert.equal(englishHash.get('text'),'English scholarship excerpt');
  assert.equal(englishHash.get('view'),'reading');
  assert.equal(englishHash.get('lang'),'en');
  assert.equal(englishHash.has('start'),false,'English excerpt does not forge original PDF text coordinates');
+ assert.equal(englishHash.get('rpara'),'1','English link identifies selected paragraph');
+ assert.equal(englishHash.get('roff'),'18','English link identifies selected character offset');
  assert.equal(englishLink.searchParams.get('publication_id'),'95415');
 
  // The optimized reading selection remains selectable for links and citations.
@@ -151,11 +153,24 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  const fakeArticle={querySelectorAll:()=>[{textContent:'A passage about English scholarship opportunities.',
   replaceChildren(...nodes){this.changed=nodes;marked=nodes[1];}}]};
  const mark=vm.runInNewContext(readingMark+';markReadingPassage(article,6)',{
-  linkedViewReading:true,linkedText:'English scholarship',fromHash:6,article:fakeArticle,
+  linkedViewReading:true,linkedText:'English scholarship',fromHash:6,linkedReadingPara:-1,linkedReadingOffset:-1,article:fakeArticle,
   el:(tag,cls,txt)=>({tag,cls,textContent:txt})
  });
  assert.equal(mark.textContent,'English scholarship','English shared phrase is marked without HTML injection');
  assert.equal(mark.cls,'ires-pdf-reading-shared-target');
+ let firstMarked=0,secondMarked=0;
+ const repeatingArticle={querySelectorAll:()=>[
+  {textContent:'Repeated English scholarship for students.',replaceChildren(){firstMarked++;}},
+  {textContent:'Repeated English scholarship for students.',replaceChildren(){secondMarked++;}}
+ ]};
+ const target2=vm.runInNewContext(readingMark+';markReadingPassage(article,6)',{
+  linkedViewReading:true,linkedText:'English scholarship',fromHash:6,
+  linkedReadingPara:1,linkedReadingOffset:9,article:repeatingArticle,
+  el:(tag,cls,txt)=>({tag,cls,textContent:txt})
+ });
+ assert.equal(target2.textContent,'English scholarship');
+ assert.equal(firstMarked,0,'First repeated occurrence not mistaken for the citation target');
+ assert.equal(secondMarked,1,'Saved paragraph offset targets the second repeated occurrence');
  for(const settings of [{translationReadOnly:true},{scientificPublicationId:95415},{scientificCandidateId:95415},{scientificBindingError:true}]){
   const env={...base,config:{...config,translationAiPilot:true,translationReadOnly:false},scientificPublicationId:0,scientificCandidateId:0,scientificBindingError:false,scientificBinding:Promise.resolve(),translateAiPilot:async()=>{providerCalls++;return 'Unexpected';}};
   for(const [key,value] of Object.entries(settings))if(key==='translationReadOnly')env.config[key]=value;else env[key]=value;
