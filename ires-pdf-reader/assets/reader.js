@@ -260,7 +260,6 @@ async function render(url,title,root,token,citation=''){
  const searchInfo=el('span','ires-pdf-search-info');searchInfo.setAttribute('role','status');
  const share=el('button','','Condividi pagina');share.type='button';share.setAttribute('aria-label','Copia collegamento alla pagina corrente');
  toolbar.append(previous,current,total,next,minus,zoomLabel,plus,fit,share,search,find,prevMatch,nextMatch,searchInfo);
- const mode=el('button','','Scorrimento continuo');mode.type='button';mode.setAttribute('aria-pressed','false');
  const fullscreen=el('button','','Schermo intero');fullscreen.type='button';
  toolbar.prepend(mode,fullscreen);
  const sidebarToggle=el('button','','☰ Pagine');sidebarToggle.type='button';sidebarToggle.setAttribute('aria-expanded','false');sidebarToggle.setAttribute('aria-label','Mostra miniature e indice');
@@ -282,7 +281,7 @@ async function render(url,title,root,token,citation=''){
  const passage=el('button','','Link passaggio');passage.type='button';passage.title='Copia un link alla pagina e al testo selezionato';
  navGroup.append(previous,current,total,next);
  zoomGroup.append(minus,zoomLabel,plus,fit);
- viewGroup.append(sidebarToggle,mode,fullscreen);
+ viewGroup.append(sidebarToggle,fullscreen);
  searchGroup.append(search,find,prevMatch,nextMatch,searchInfo);
  const readingToggle=el('button','ires-pdf-reading-toggle','Lettura tradotta');readingToggle.type='button';readingToggle.hidden=true;
  actionsGroup.append(bookmark,annotate,passage,cite,share,translate,readingToggle,speech,speechPause,speechStop,speechRate);
@@ -379,14 +378,17 @@ async function render(url,title,root,token,citation=''){
   let remembered=1;try{remembered=Number(localStorage.getItem(storageKey))||1;}catch(_error){}
   const hashParams=new URLSearchParams(location.hash.slice(1));
   const fromHash=Number(hashParams.get('page'));
+  const linkedViewReading=hashParams.get('view')==='reading'&&hashParams.get('lang')==='en';
   const linkedText=(hashParams.get('text')||'').slice(0,200);
   const linkedStart=(hashParams.get('start')||'').split(',').map(Number);
   const linkedEnd=(hashParams.get('end')||'').split(',').map(Number);
   const hasLinkedPosition=linkedStart.length===2&&linkedEnd.length===2&&linkedStart.concat(linkedEnd).every(Number.isInteger);
-  let page=fromHash>0?fromHash:remembered,scale=1.2,renderId=0,renderTask=null;
+  let page=fromHash>0?Math.min(doc.numPages,fromHash):Math.min(doc.numPages,remembered),scale=1.2,renderId=0,renderTask=null;
+  let pdfLinkJumped=false,readingLinkJumped=false;
   let queue=Promise.resolve();
-  let continuous=false, slots=[],scrollTimer=null,scrollBusy=false,scrollAgain=false,modeEpoch=0;
-  const stack=el('div','ires-pdf-continuous');stack.hidden=true;viewport.append(stack);
+  let continuous=true, slots=[],scrollTimer=null,scrollBusy=false,scrollAgain=false,modeEpoch=0;
+  const stack=el('div','ires-pdf-continuous');stack.hidden=false;singlePage.hidden=true;viewport.append(stack);
+  viewport.classList.add('ires-pdf-touch-continuous');
   const dpr=()=>Math.min(window.devicePixelRatio||1,2);
   let searchTerm=linkedText;
   // A shared passage is one phrase, not a bag of words.
@@ -464,6 +466,19 @@ async function render(url,title,root,token,citation=''){
     index+=Math.max(1,term.length);
    }
   }
+  function scrollToPdfLinkedPassage(layer){
+   if(!linkedText||linkedViewReading||pdfLinkJumped)return;
+   const holder=layer.closest('[data-page]');
+   if((holder?Number(holder.dataset.page):page)!==fromHash)return;
+   const match=layer.querySelector('.ires-pdf-match-overlay:not(.ires-pdf-note-highlight)');
+   if(!match)return;
+   pdfLinkJumped=true;
+   window.requestAnimationFrame(()=>{
+    if(token!==session||!match.isConnected)return;
+    const rect=match.getBoundingClientRect(),frame=viewport.getBoundingClientRect();
+    viewport.scrollTop+=rect.top-frame.top-Math.min(frame.height*.3,170);
+   });
+  }
   async function addTextLayer(pdfPage,holder,view,epoch){
    const layer=holder.querySelector('.ires-pdf-text-layer');
    if(!layer)return;
@@ -473,7 +488,7 @@ async function render(url,title,root,token,citation=''){
    layer.style.setProperty('--scale-factor',String(view.scale));
    const task=pdfjs.renderTextLayer({textContentSource:text,container:layer,viewport:view,textDivs:[]});
    await task.promise;
-   if(token===session&&epoch===modeEpoch){highlightText(layer);if(translationMode)showOverlays();}
+   if(token===session&&epoch===modeEpoch){highlightText(layer);scrollToPdfLinkedPassage(layer);if(translationMode)showOverlays();}
   }
   async function setupContinuous(){
    const epoch=++modeEpoch;
@@ -548,14 +563,6 @@ async function render(url,title,root,token,citation=''){
    if(continuous){const slot=slots[page-1];if(slot)viewport.scrollTop=slot.offsetTop-stack.offsetTop;refreshVisible();}
    else schedule();
   }
-  mode.onclick=()=>{
-   continuous=!continuous;modeEpoch++;
-   mode.setAttribute('aria-pressed',String(continuous));
-   mode.textContent=continuous?t(10):t(11);mode.title=continuous?'Passa alla pagina singola':'Passa allo scorrimento continuo';
-   singlePage.hidden=continuous;stack.hidden=!continuous;
-   viewport.classList.toggle('ires-pdf-touch-continuous',continuous);
-   if(continuous)setupContinuous().catch(fail);else{stack.replaceChildren();slots=[];schedule();}
-  };
   fullscreen.onclick=async()=>{
    try{if(document.fullscreenElement)await document.exitFullscreen();else await root.requestFullscreen();}
    catch(error){console.warn('IRES PDF Reader fullscreen',error);}
@@ -1678,9 +1685,9 @@ async function render(url,title,root,token,citation=''){
   search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(matches.length&&searchTerm===search.value.trim())showMatch(matchIndex+(e.shiftKey?-1:1));else searchDocument();}});
   share.onclick=()=>copyValue(pageUrl(''),share);
   viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
-  viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();previous.click();}});
-  // Start in continuous-scroll mode; the toolbar still allows switching to single page.
-  mode.click();
+  viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'){e.preventDefault();previous.click();}});
+  // Continuous PDF scrolling is the only public PDF viewing mode.
+  setupContinuous().catch(fail);
   if(linkedText){searchInfo.textContent='Passaggio evidenziato · pagina '+page;}
  }catch(error){if(token!==session)return;fail(error);}
  function fail(error){
