@@ -379,6 +379,8 @@ async function render(url,title,root,token,citation=''){
   const hashParams=new URLSearchParams(location.hash.slice(1));
   const fromHash=Number(hashParams.get('page'));
   const linkedViewReading=hashParams.get('view')==='reading'&&hashParams.get('lang')==='en';
+  const linkedReadingPara=hashParams.has('rpara')?Number(hashParams.get('rpara')):-1;
+  const linkedReadingOffset=hashParams.has('roff')?Number(hashParams.get('roff')):-1;
   const linkedText=(hashParams.get('text')||'').slice(0,200);
   const linkedStart=(hashParams.get('start')||'').split(',').map(Number);
   const linkedEnd=(hashParams.get('end')||'').split(',').map(Number);
@@ -683,8 +685,19 @@ async function render(url,title,root,token,citation=''){
    const range=sel.getRangeAt(0);
    const startElement=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement;
    const readingSection=readingMode&&startElement&&startElement.closest('.ires-pdf-reading-page');
-   if(readingSection&&readingSection.contains(range.endContainer))
-    return {page:Number(readingSection.dataset.page),reading:true};
+   if(readingSection&&readingSection.contains(range.endContainer)){
+    const article=readingSection.querySelector('.ires-pdf-reading-article');
+    const parts=article?[...article.querySelectorAll('p,h3,th,td')]:[];
+    const index=parts.findIndex(node=>node.contains(range.startContainer));
+    let offset=0;
+    if(index>=0){
+     const before=document.createRange();
+     before.selectNodeContents(parts[index]);
+     before.setEnd(range.startContainer,range.startOffset);
+     offset=before.toString().length;
+    }
+    return {page:Number(readingSection.dataset.page),reading:true,rpara:index,roff:offset};
+   }
    const layer=startElement&&startElement.closest('.ires-pdf-text-layer');
    if(!layer||!layer.contains(range.endContainer))return null;
    const nodes=[];layer.querySelectorAll('span').forEach(span=>{const walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);while(walker.nextNode())if(walker.currentNode.nodeValue)nodes.push(walker.currentNode);});
@@ -1033,12 +1046,28 @@ async function render(url,title,root,token,citation=''){
    if(!escaped.length)return null;
    let pattern;
    try{pattern=new RegExp(escaped.join('\\s+'),'iu');}catch(_){return null;}
-   for(const node of article.querySelectorAll('p,h3,th,td')){
-    const source=node.textContent||'',match=pattern.exec(source);
-    if(!match)continue;
-    const target=el('mark','ires-pdf-reading-shared-target',match[0]);
-    node.replaceChildren(source.slice(0,match.index),target,source.slice(match.index+match[0].length));
+   const nodes=[...article.querySelectorAll('p,h3,th,td')];
+   const markAt=(node,start,length)=>{
+    const source=node.textContent||'';
+    const target=el('mark','ires-pdf-reading-shared-target',source.slice(start,start+length));
+    node.replaceChildren(source.slice(0,start),target,source.slice(start+length));
     return target;
+   };
+   // Paragraph index and character offset disambiguate repeated quotations.
+   if(Number.isInteger(linkedReadingPara)&&linkedReadingPara>=0&&linkedReadingPara<nodes.length&&
+      Number.isInteger(linkedReadingOffset)&&linkedReadingOffset>=0){
+    const node=nodes[linkedReadingPara],source=node.textContent||'';
+    if(linkedReadingOffset<source.length){
+     const remaining=source.slice(linkedReadingOffset);
+     const expected=phrase.slice(0,Math.min(32,phrase.length)).toLocaleLowerCase();
+     if(remaining.toLocaleLowerCase().startsWith(expected)){
+      return markAt(node,linkedReadingOffset,Math.min(phrase.length,remaining.length));
+     }
+    }
+   }
+   for(const node of nodes){
+    const source=node.textContent||'',match=pattern.exec(source);
+    if(match)return markAt(node,match.index,match[0].length);
    }
    return null;
   }
@@ -1686,6 +1715,9 @@ async function render(url,title,root,token,citation=''){
    link.hash='page='+encodeURIComponent(targetPage)+(text?'&text='+encodeURIComponent(text):'');
    // Existing #page/#text/#start/#end PDF text links remain compatible.
    if(englishReading)link.hash+='&view=reading&lang=en';
+   if(englishReading&&position&&position.reading&&Number.isInteger(position.rpara)&&position.rpara>=0&&
+      Number.isInteger(position.roff)&&position.roff>=0)
+    link.hash+='&rpara='+position.rpara+'&roff='+position.roff;
    if(position&&!position.reading&&Array.isArray(position.start)&&Array.isArray(position.end))
     link.hash+='&start='+position.start.join(',')+'&end='+position.end.join(',');
    return link.href;
