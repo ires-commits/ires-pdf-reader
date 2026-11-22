@@ -676,7 +676,9 @@ async function render(url,title,root,token,citation=''){
    const pdfA=anchor.closest('.ires-pdf-text-layer'),pdfB=focus.closest('.ires-pdf-text-layer');
    const readingA=readingMode&&anchor.closest('.ires-pdf-reading-page');
    const readingB=readingMode&&focus.closest('.ires-pdf-reading-page');
-   if(!(pdfA&&pdfA===pdfB)&&!(readingA&&readingA===readingB))return '';
+   const overlayA=translationMode&&scientificPublicationId&&anchor.closest('.ires-pdf-translation-overlay-ocr');
+   const overlayB=translationMode&&scientificPublicationId&&focus.closest('.ires-pdf-translation-overlay-ocr');
+   if(!(pdfA&&pdfA===pdfB)&&!(readingA&&readingA===readingB)&&!(overlayA&&overlayA===overlayB))return '';
    return selection.toString().replace(/\\s+/g,' ').trim().slice(0,200);
   }
   function capturePosition(){
@@ -696,6 +698,20 @@ async function render(url,title,root,token,citation=''){
      offset=before.toString().length;
     }
     return {page:Number(readingSection.dataset.page),reading:true,rpara:index,roff:offset};
+   }
+   const overlay=translationMode&&scientificPublicationId&&startElement&&startElement.closest('.ires-pdf-translation-overlay-ocr');
+   if(overlay&&overlay.contains(range.endContainer)){
+    const holder=overlay.closest('[data-page]');
+    const number=holder?Number(holder.dataset.page):page;
+    const entry=translationCache.get('en:'+number);
+    const text=range.toString().trim(),paragraphs=entry&&typeof entry.scientificText==='string'?
+     entry.scientificText.split(/\n\s*\n/).filter(Boolean):[];
+    let rpara=-1,roff=-1;
+    for(let n=0;n<paragraphs.length;n++){
+     const offset=paragraphs[n].toLocaleLowerCase().indexOf(text.toLocaleLowerCase());
+     if(offset>=0){rpara=n;roff=offset;break;}
+    }
+    return {page:number,reading:true,rpara,roff};
    }
    const layer=startElement&&startElement.closest('.ires-pdf-text-layer');
    if(!layer||!layer.contains(range.endContainer))return null;
@@ -1714,7 +1730,7 @@ async function render(url,title,root,token,citation=''){
    link.searchParams.set('ires_pdf_auto','1');
    const position=text?cachedPosition:null;
    const targetPage=position&&Number.isInteger(position.page)?position.page:page;
-   const englishReading=readingMode&&scientificReadingEnabled();
+   const englishReading=scientificReadingEnabled()&&(readingMode||Boolean(position&&position.reading));
    link.hash='page='+encodeURIComponent(targetPage)+(text?'&text='+encodeURIComponent(text):'');
    // Existing #page/#text/#start/#end PDF text links remain compatible.
    if(englishReading)link.hash+='&view=reading&lang=en';
