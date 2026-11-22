@@ -15,6 +15,7 @@ const pageNavigation=part('  function navigate(){', '  fullscreen.onclick=');
 const shareLink=part('  function pageUrl(text){', '  passage.onclick=');
 const selectedText=part('  function readSelection(){', '  function capturePosition(){');
 const readingMark=part('  function markReadingPassage(', '  function paintReadingPage(');
+const originalPassageJump=part('  function scrollToPdfLinkedPassage(', '  async function addTextLayer(');
 const readingSync=part('  function syncScientificReading(', '  function queueVisibleTranslation(');
 const translator=part('  async function translateText(', '  async function translateLong(');
 const panel=part('  function pageTranslationPanel(', '  function showOverlays(');
@@ -116,6 +117,16 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  assert.deepEqual(modeCalls,[],'Scrolling onto an approved page does not interrupt continuous English reading');
  assert.equal(js.includes("viewGroup.append(sidebarToggle,fullscreen)"),true,'Only continuous PDF display is exposed');
  assert.equal(js.includes('let continuous=true'),true,'Continuous PDF is the default');
+ assert.equal(/\bmode\./.test(js),false,'Removed single-page mode does not leave orphaned control references');
+ const highlight={isConnected:true,getBoundingClientRect:()=>({top:400})};
+ const layer={closest:()=>({dataset:{page:'8'}}),querySelector:()=>highlight};
+ const pdfViewport={scrollTop:0,getBoundingClientRect:()=>({top:100,height:800})};
+ const jumpEnv={layer,linkedText:'Quoted original source',linkedViewReading:false,pdfLinkJumped:false,
+   fromHash:8,page:8,token:1,session:1,viewport:pdfViewport,
+   window:{requestAnimationFrame:callback=>callback()}};
+ vm.runInNewContext(originalPassageJump+';scrollToPdfLinkedPassage(layer)',jumpEnv);
+ assert.equal(jumpEnv.pdfLinkJumped,true,'Legacy exact PDF passage is handled');
+ assert.equal(pdfViewport.scrollTop,130,'Legacy PDF text highlight scrolls near viewport center');
  assert.equal(providerCalls,0,'Navigation and fallback do not call the translation provider');
 
  // Legacy links retain page/text/source coordinates; new English excerpts carry
