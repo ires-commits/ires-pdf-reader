@@ -295,7 +295,6 @@ async function render(url,title,root,token,citation=''){
  toolbar.replaceChildren(viewGroup,navGroup,zoomGroup,toolsToggle);
  toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','Strumenti lettore PDF');
  sidebarToggle.textContent='☰';sidebarToggle.title='Pannello pagine';sidebarToggle.setAttribute('aria-label','Apri o chiudi il pannello laterale');
- mode.textContent='Continuo';mode.title='Passa allo scorrimento continuo';
  fullscreen.textContent='⛶';fullscreen.title='Schermo intero';fullscreen.setAttribute('aria-label','Schermo intero');
  fit.textContent='Adatta';share.textContent='Condividi';share.title='Copia collegamento alla pagina';
  search.placeholder='Cerca nel PDF';find.textContent='Trova';
