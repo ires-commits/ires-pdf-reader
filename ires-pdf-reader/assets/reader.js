@@ -671,13 +671,21 @@ async function render(url,title,root,token,citation=''){
    if(!root.contains(selection.anchorNode)||!root.contains(selection.focusNode))return '';
    const anchor=selection.anchorNode.nodeType===1?selection.anchorNode:selection.anchorNode.parentElement;
    const focus=selection.focusNode.nodeType===1?selection.focusNode:selection.focusNode.parentElement;
-   if(!anchor||!focus||!anchor.closest('.ires-pdf-text-layer')||!focus.closest('.ires-pdf-text-layer'))return '';
+   if(!anchor||!focus)return '';
+   const pdfA=anchor.closest('.ires-pdf-text-layer'),pdfB=focus.closest('.ires-pdf-text-layer');
+   const readingA=readingMode&&anchor.closest('.ires-pdf-reading-page');
+   const readingB=readingMode&&focus.closest('.ires-pdf-reading-page');
+   if(!(pdfA&&pdfA===pdfB)&&!(readingA&&readingA===readingB))return '';
    return selection.toString().replace(/\\s+/g,' ').trim().slice(0,200);
   }
   function capturePosition(){
    const sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.rangeCount)return null;
    const range=sel.getRangeAt(0);
-   const layer=range.startContainer.parentElement&&range.startContainer.parentElement.closest('.ires-pdf-text-layer');
+   const startElement=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement;
+   const readingSection=readingMode&&startElement&&startElement.closest('.ires-pdf-reading-page');
+   if(readingSection&&readingSection.contains(range.endContainer))
+    return {page:Number(readingSection.dataset.page),reading:true};
+   const layer=startElement&&startElement.closest('.ires-pdf-text-layer');
    if(!layer||!layer.contains(range.endContainer))return null;
    const nodes=[];layer.querySelectorAll('span').forEach(span=>{const walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);while(walker.nextNode())if(walker.currentNode.nodeValue)nodes.push(walker.currentNode);});
    const a=nodes.indexOf(range.startContainer),b=nodes.indexOf(range.endContainer);
@@ -1673,16 +1681,23 @@ async function render(url,title,root,token,citation=''){
    if(scientificPublicationId)link.searchParams.set('publication_id',String(scientificPublicationId));
    link.searchParams.set('ires_pdf_auto','1');
    const position=text?cachedPosition:null;
-   const targetPage=position?position.page:page;
+   const targetPage=position&&Number.isInteger(position.page)?position.page:page;
+   const englishReading=readingMode&&scientificReadingEnabled();
    link.hash='page='+encodeURIComponent(targetPage)+(text?'&text='+encodeURIComponent(text):'');
-   if(position)link.hash+='&start='+position.start.join(',')+'&end='+position.end.join(',');
+   // Existing #page/#text/#start/#end PDF text links remain compatible.
+   if(englishReading)link.hash+='&view=reading&lang=en';
+   if(position&&!position.reading&&Array.isArray(position.start)&&Array.isArray(position.end))
+    link.hash+='&start='+position.start.join(',')+'&end='+position.end.join(',');
    return link.href;
   }
   passage.onclick=async()=>{
    const text=selectedPassage();
    if(!text){window.alert('Seleziona prima un passaggio nel documento.');return;}
    const position=cachedPosition||capturePosition();
-   if(!position){window.alert('Non riesco a individuare la posizione della selezione. Riprova selezionando il testo nel PDF.');return;}
+   if(!position){window.alert('Non riesco a individuare la posizione della selezione. Riprova selezionando il testo.');return;}
+   // Native passage store uses PDF.js text spans. Saved English reading uses
+   // page + excerpt anchors, without inventing original-PDF coordinates.
+   if(position.reading){await copyValue(pageUrl(text),passage);return;}
    passage.disabled=true;
    const originalLabel=passage.textContent;passage.textContent='Salvataggio…';
    try{
@@ -1707,8 +1722,10 @@ async function render(url,title,root,token,citation=''){
   };
   cite.onclick=()=>{
    const selected=selectedPassage();
+   const position=selected?(capturePosition()||cachedPosition):null;
+   const citationPage=position&&Number.isInteger(position.page)?position.page:page;
    const quotation=selected?'“'+selected+'” ':'';
-   const citationText=quotation+(citation||title+' (s.d.).')+' p. '+page+'. '+pageUrl(selected);
+   const citationText=quotation+(citation||title+' (s.d.).')+' p. '+citationPage+'. '+pageUrl(selected);
    copyValue(citationText,cite);
   };
   if(linkedText){search.value='';searchInfo.textContent='Passaggio condiviso';}
@@ -1834,11 +1851,22 @@ async function render(url,title,root,token,citation=''){
   search.addEventListener('input',()=>{searchRun++;matches=[];matchIndex=-1;searchTerm='';root.querySelectorAll('.ires-pdf-text-layer').forEach(highlightText);resultsList.replaceChildren();searchInfo.textContent='';prevMatch.disabled=true;nextMatch.disabled=true;find.disabled=false;});
   search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(matches.length&&searchTerm===search.value.trim())showMatch(matchIndex+(e.shiftKey?-1:1));else searchDocument();}});
   share.onclick=()=>copyValue(pageUrl(''),share);
-  viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: usa le frecce per cambiare pagina');
+  viewport.setAttribute('tabindex','0');viewport.setAttribute('aria-label','Documento PDF: scorri per leggere tutte le pagine');
+  readingView.setAttribute('tabindex','0');readingView.setAttribute('aria-label','Traduzione inglese: scorri per leggere tutte le pagine');
   viewport.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();next.click();}else if(e.key==='ArrowLeft'){e.preventDefault();previous.click();}});
   // Continuous PDF scrolling is the only public PDF viewing mode.
-  setupContinuous().catch(fail);
-  if(linkedText){searchInfo.textContent='Passaggio evidenziato · pagina '+page;}
+  await setupContinuous();
+  // Shared English links are served strictly from previously saved scientific
+  // pages, after the original PDF hash is verified. No provider invocation.
+  if(linkedViewReading){
+   await scientificBinding;
+   if(token===session&&scientificPublicationId&&config.scientificTranslationApi){
+    language.value='en';
+    if(!translationMode)setTranslationMode(true);
+    setReadingMode(true,true);
+   }
+  }
+  if(linkedText){searchInfo.textContent='Passaggio condiviso · pagina '+page;}
  }catch(error){if(token!==session)return;fail(error);}
  function fail(error){
   if(token!==session)return;
