@@ -999,8 +999,136 @@ async function render(url,title,root,token,citation=''){
   const readingI18n=readingMessages[uiLang]||readingMessages.en;
   let readingNoticeDismissed=false,readingAutoOptOut=false,readingAutomatic=false;
   let readingRenderedPage=0,readingRenderedEntry=null;
+  // Scientific English reading is one scrollable document, not one page at a time.
+  // Only nearby saved pages are fetched. This path never requests AI translation.
+  let readingStack=null,readingPages=[],readingLoads=new Map(),readingScrollTimer=null;
+  function scientificReadingEnabled(){return !!scientificPublicationId&&language.value==='en';}
+  function recordReadingPage(number){
+   const n=Math.max(1,Math.min(doc.numPages,number));
+   page=n;translationActivePage=n;current.value=String(n);
+   bookmark.textContent=bookmarks.some(x=>x.page===n)?'★ Segnalibro':'☆ Segnalibro';
+   try{localStorage.setItem(storageKey,String(n));}catch(_){}
+  }
+  function markReadingPassage(article,number){
+   if(!linkedViewReading||!linkedText||number!==fromHash)return null;
+   const phrase=linkedText.trim();
+   if(!phrase)return null;
+   const escaped=phrase.split(/\s+/).filter(Boolean).map(part=>part.replace(/[.*+?^{}()|[\]\\$]/g,'\\  function renderReadingView(){'));
+   if(!escaped.length)return null;
+   let pattern;
+   try{pattern=new RegExp(escaped.join('\\s+'),'iu');}catch(_){return null;}
+   for(const node of article.querySelectorAll('p,h3,th,td')){
+    const source=node.textContent||'',match=pattern.exec(source);
+    if(!match)continue;
+    const target=el('mark','ires-pdf-reading-shared-target',match[0]);
+    node.replaceChildren(source.slice(0,match.index),target,source.slice(match.index+match[0].length));
+    return target;
+   }
+   return null;
+  }
+  function paintReadingPage(number,entry){
+   const section=readingPages[number-1];if(!section)return;
+   const article=section.querySelector('.ires-pdf-reading-article');if(!article)return;
+   article.replaceChildren();
+   if(entry&&entry.scientific&&entry.readingComplete===true&&typeof entry.scientificText==='string'&&entry.scientificText.trim()){
+    entry.scientificText.split(/\n\s*\n/).filter(Boolean).forEach(para=>article.append(el('p','',para.trim())));
+    section.dataset.readingState='ready';
+    const target=markReadingPassage(article,number);
+    if(target&&!readingLinkJumped){
+     window.requestAnimationFrame(()=>{
+      if(token!==session||!readingMode||!target.isConnected)return;
+      const rect=target.getBoundingClientRect(),frame=readingView.getBoundingClientRect();
+      readingView.scrollTop+=rect.top-frame.top-Math.min(150,frame.height*.25);
+      readingLinkJumped=true;
+     });
+    }
+   }else{
+    section.dataset.readingState='missing';
+    article.append(el('p','ires-pdf-reading-unavailable',uiLang==='it'?
+     'La traduzione inglese verificata di questa pagina non è disponibile. Puoi consultare il PDF originale.':
+     'A verified English translation is not available for this page. The original PDF is available.'));
+    const original=el('button','ires-pdf-reading-back',readingI18n.back);
+    original.type='button';original.onclick=()=>{recordReadingPage(number);readingAutoOptOut=true;setReadingMode(false);};
+    article.append(original);
+   }
+  }
+  async function ensureReadingPage(number){
+   if(number<1||number>doc.numPages||!scientificReadingEnabled())return;
+   const section=readingPages[number-1];if(!section||section.dataset.readingState)return;
+   if(readingLoads.has(number))return readingLoads.get(number);
+   section.dataset.readingState='loading';
+   const job=(async()=>{
+    try{
+     let entry=translationCache.get('en:'+number);
+     if(!entry)entry=await scientificStoredPage(doc,number,'en');
+     if(token!==session||!section.isConnected)return;
+     if(entry)translationCache.set('en:'+number,entry);
+     paintReadingPage(number,entry);
+    }catch(_){
+     if(token===session&&section.isConnected)paintReadingPage(number,null);
+    }finally{readingLoads.delete(number);}
+   })();
+   readingLoads.set(number,job);
+   return job;
+  }
+  function loadReadingVicinity(number){
+   // Never eagerly fetch hundreds of pages from long research reports.
+   ensureReadingPage(number);
+   if(number<doc.numPages)ensureReadingPage(number+1);
+   if(number>1)ensureReadingPage(number-1);
+  }
+  function jumpReadingPage(number){
+   if(!readingStack||!readingStack.isConnected)return;
+   const n=Math.max(1,Math.min(doc.numPages,number));
+   recordReadingPage(n);
+   const section=readingPages[n-1];
+   if(!section)return;
+   const rect=section.getBoundingClientRect(),frame=readingView.getBoundingClientRect();
+   readingView.scrollTop+=rect.top-frame.top-8;
+   loadReadingVicinity(n);
+  }
+  function onReadingScroll(){
+   if(!readingMode||!scientificReadingEnabled()||!readingStack||!readingStack.isConnected)return;
+   const frame=readingView.getBoundingClientRect();
+   const focal=frame.top+Math.min(160,frame.height*.25);
+   let seen=doc.numPages;
+   for(let i=0;i<readingPages.length;i++){
+    if(readingPages[i].getBoundingClientRect().bottom>focal){seen=i+1;break;}
+   }
+   if(seen!==page)recordReadingPage(seen);
+   loadReadingVicinity(seen);
+  }
+  readingView.addEventListener('scroll',()=>{
+   if(!readingMode||!scientificReadingEnabled())return;
+   window.clearTimeout(readingScrollTimer);
+   readingScrollTimer=window.setTimeout(onReadingScroll,80);
+  },{passive:true});
+  function renderScientificReadingView(){
+   if(readingStack&&readingStack.isConnected)return;
+   const header=el('header','ires-pdf-reading-header');
+   header.append(el('span','ires-pdf-reading-eyebrow','IRES · READING EXPERIENCE'),
+    el('h2','',readingI18n.title),
+    el('p','ires-pdf-reading-note',uiLang==='it'?
+     'Traduzione inglese salvata · scorrimento continuo. Puoi tornare in qualsiasi momento al PDF originale.':
+     'Saved English translation · continuous reading. You can return to the original PDF at any time.'));
+   const back=el('button','ires-pdf-reading-back',readingI18n.back);
+   back.type='button';back.onclick=()=>{readingAutoOptOut=true;setReadingMode(false);};
+   header.append(back);
+   readingStack=el('div','ires-pdf-reading-stack');readingPages=[];readingLoads=new Map();
+   for(let n=1;n<=doc.numPages;n++){
+    const section=el('section','ires-pdf-reading-page');section.dataset.page=String(n);
+    section.setAttribute('aria-label',(uiLang==='it'?'Pagina ':'Page ')+n);
+    const label=el('div','ires-pdf-reading-page-label',(uiLang==='it'?'Pagina ':'Page ')+n+' / '+doc.numPages);
+    const article=el('article','ires-pdf-reading-article');
+    article.append(el('p','ires-pdf-reading-wait',readingI18n.wait));
+    section.append(label,article);readingStack.append(section);readingPages.push(section);
+   }
+   readingView.replaceChildren(header,readingStack);
+   window.requestAnimationFrame(()=>{if(readingMode&&readingStack.isConnected)jumpReadingPage(translationActivePage||page);});
+  }
   function renderReadingView(){
    if(!readingMode)return;
+   if(scientificReadingEnabled()){renderScientificReadingView();return;}
    const number=translationActivePage||page,entry=translationCache.get(language.value+':'+number);
    const header=el('header','ires-pdf-reading-header');
    const eyebrow=el('span','ires-pdf-reading-eyebrow','IRES · READING EXPERIENCE');
@@ -1056,8 +1184,19 @@ async function render(url,title,root,token,citation=''){
    workspace.classList.toggle('ires-pdf-reading-active',readingMode);
    readingToggle.setAttribute('aria-pressed',String(readingMode));
    readingToggle.textContent=readingMode?readingI18n.pdf:readingI18n.reading;
-   if(readingMode){renderReadingView();if(!previouslyReading)readingView.scrollTop=0;}
-   else{readingRenderedPage=0;readingRenderedEntry=null;showOverlays();}
+   if(readingMode){
+    renderReadingView();
+    if(scientificReadingEnabled()){
+     if(previouslyReading)jumpReadingPage(translationActivePage||page);
+    }else if(!previouslyReading)readingView.scrollTop=0;
+   }else{
+    readingRenderedPage=0;readingRenderedEntry=null;
+    if(scientificReadingEnabled()&&continuous&&slots[page-1]){
+     const selected=slots[page-1];
+     viewport.scrollTop=selected.offsetTop-stack.offsetTop;
+    }
+    showOverlays();
+   }
   }
   readingToggle.onclick=()=>{
    if(readingMode){readingAutoOptOut=true;setReadingMode(false);}
