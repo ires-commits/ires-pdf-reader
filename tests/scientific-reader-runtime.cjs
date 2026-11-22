@@ -166,7 +166,7 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  const textSelection=vm.runInNewContext(selectedText+';readSelection()',{
   window:{getSelection:()=>({isCollapsed:false,anchorNode:{nodeType:3,parentElement:readingElement},
    focusNode:{nodeType:3,parentElement:readingElement},toString:()=> 'English scholarship excerpt'})},
-  root:{contains:()=>true},readingMode:true
+  root:{contains:()=>true},readingMode:true,translationMode:false,scientificPublicationId:95415
  });
  assert.equal(textSelection,'English scholarship excerpt','Text selection inside reading page is recognized');
  const overlay={contains:()=>true,closest:selector=>selector==='[data-page]'?{dataset:{page:'7'}}:null};
