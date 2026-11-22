@@ -10,6 +10,9 @@ const resolver=part('async function resolveScientificPublication(', 'async funct
 const verifier=part(' async function verifyScientificDocument(', ' async function scientificGeometryPage(');
 const reader=part(' async function scientificEnglishPage(', ' // IRES Produzione Scientifica stores');
 const stored=part(' async function scientificStoredPage(', ' const browserLang=');
+const readingPolicy=part('function scientificReadingAction(', 'async function render(');
+const pageNavigation=part('  function navigate(){', '  mode.onclick=');
+const readingSync=part('  function syncScientificReading(', '  function queueVisibleTranslation(');
 const translator=part('  async function translateText(', '  async function translateLong(');
 const panel=part('  function pageTranslationPanel(', '  function showOverlays(');
 const sourceUrl='https://example.com/uploads/marriages.pdf';
@@ -61,6 +64,7 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
   translateLong:async()=>{providerCalls++;throw Error('Unexpected provider call');}
  });
  assert.equal(saved.scientificText,translation.translation);
+ assert.equal(saved.readingComplete,true,'Unaligned page has the entire saved English version');
  assert.equal(saved.verifiedOverlay,false);
  assert.equal(saved.layoutGenerated,false);
  assert.equal(saved.blocks.length,0,'Full-page text must not invent block associations');
@@ -70,7 +74,45 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
   scientificEnglishPage:async()=>translation.translation
  });
  assert.equal(partialSaved.scientificText,translation.translation,'Partial overlay keeps complete saved English in reading view');
+ assert.equal(partialSaved.readingComplete,true,'Partial overlay is paired with a full English reading fallback');
  assert.equal(partialSaved.blocks.length,1);
+ const completeOcr=await vm.runInNewContext(stored+';scientificStoredPage({},1,"en")',{
+  verifyScientificDocument:async()=>true,scientificApprovedOcr:async()=>({partial:false,blocks:[{}],scientificText:'Just block'}),
+  scientificEnglishPage:async()=>translation.translation
+ });
+ assert.equal(completeOcr.readingComplete,true,'Full OCR overlay also exposes the complete saved text for manual reading');
+ const decision=(entry,automatic=false,optOut=false)=>vm.runInNewContext(readingPolicy+';scientificReadingAction(entry,automatic,optOut)',{entry,automatic,optOut});
+ const unapproved={scientific:true,verifiedOverlay:false,readingComplete:true,scientificText:translation.translation};
+ assert.equal(decision(unapproved),'reading','Unapproved pages automatically show full English text');
+ assert.equal(decision({...unapproved,verifiedOverlay:true,partial:true}),'reading','Partial overlays never mix Italian and English in automatic reading');
+ assert.equal(decision({...unapproved,verifiedOverlay:true,partial:false}),'keep','Complete approved overlay stays inside PDF');
+ assert.equal(decision({...unapproved,verifiedOverlay:true,partial:false},true),'pdf','Auto reading returns to PDF when a fully approved page is reached');
+ assert.equal(decision(unapproved,false,true),'keep','A user can opt out of automatic reading on the current page');
+ assert.equal(decision({...unapproved,readingComplete:false}),'keep','Truncated English is never presented as a full translation');
+ assert.equal(decision(null,true),'pdf','Missing source returns to original PDF');
+ let navigationCalls=[];
+ const navigationState={translationMode:true,page:8,translationActivePage:7,readingMode:true,
+  readingAutoOptOut:true,readingView:{scrollTop:42},continuous:false,
+  renderReadingView:()=>navigationCalls.push('render'),
+  queueVisibleTranslation:()=>navigationCalls.push('fetch'),
+  schedule:()=>navigationCalls.push('pdf')};
+ vm.runInNewContext(pageNavigation+';navigate()',navigationState);
+ assert.equal(navigationState.translationActivePage,8,'Next page updates the active page while the PDF canvas is hidden');
+ assert.equal(navigationState.readingAutoOptOut,false,'Opt-out lasts only for the current page');
+ assert.equal(navigationState.readingView.scrollTop,0,'New English page starts at its beginning');
+ assert.deepEqual(navigationCalls,['render','fetch','pdf'],'Reader navigation initiates the next saved English page');
+ let modeCalls=[],status={textContent:''};
+ const syncEnvironment={entry:unapproved,translationMode:true,language:{value:'en'},
+  visiblePageForTranslation:()=>8,readingAutomatic:false,readingAutoOptOut:false,
+  readingMode:false,readingRenderedPage:0,readingRenderedEntry:null,translationStatus:status,
+  setReadingMode:(enabled,auto)=>modeCalls.push([enabled,auto]),renderReadingView:()=>modeCalls.push('render')};
+ vm.runInNewContext(readingPolicy+readingSync+';syncScientificReading(8,entry)',syncEnvironment);
+ assert.deepEqual(modeCalls,[[true,true]],'Full saved English automatically opens in optimized reading view');
+ modeCalls=[];
+ Object.assign(syncEnvironment,{readingMode:true,readingAutomatic:true,entry:{...unapproved,verifiedOverlay:true,partial:false}});
+ vm.runInNewContext(readingPolicy+readingSync+';syncScientificReading(8,entry)',syncEnvironment);
+ assert.deepEqual(modeCalls,[[false,undefined]],'Reader automatically returns to PDF for a completely approved page');
+ assert.equal(providerCalls,0,'Navigation and fallback do not call the translation provider');
  for(const settings of [{translationReadOnly:true},{scientificPublicationId:95415},{scientificCandidateId:95415},{scientificBindingError:true}]){
   const env={...base,config:{...config,translationAiPilot:true,translationReadOnly:false},scientificPublicationId:0,scientificCandidateId:0,scientificBindingError:false,scientificBinding:Promise.resolve(),translateAiPilot:async()=>{providerCalls++;return 'Unexpected';}};
   for(const [key,value] of Object.entries(settings))if(key==='translationReadOnly')env.config[key]=value;else env[key]=value;

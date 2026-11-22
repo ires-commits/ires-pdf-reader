@@ -27,6 +27,15 @@ async function resolveScientificPublication(url,candidate){
   return {id,pdfHash:data.pdf_hash.toLowerCase()};
  }catch(error){return {error:true};}
 }
+// Decide whether a scientific page should show its complete saved English text
+// instead of a mixed-language or unapproved PDF overlay. No AI provider calls.
+function scientificReadingAction(entry,automatic,optOut){
+ if(!entry||entry.scientific!==true)return automatic?'pdf':'keep';
+ if(entry.verifiedOverlay===true&&entry.partial!==true)return automatic?'pdf':'keep';
+ const complete=entry.readingComplete===true&&typeof entry.scientificText==='string'&&!!entry.scientificText.trim();
+ if(!complete)return automatic?'pdf':'keep';
+ return optOut?'keep':'reading';
+}
 async function render(url,title,root,token,citation=''){
  const publicationMatch=document.body.className.match(/(?:^|\s)postid-(\d+)(?:\s|$)/);
  // These are candidates only. The server must match the requested PDF, and
@@ -185,10 +194,14 @@ async function render(url,title,root,token,citation=''){
   if(target!=='en'||!(await verifyScientificDocument(doc)))return null;
   const approvedOcr=await scientificApprovedOcr(doc,number);
   if(approvedOcr){
-   if(approvedOcr.partial){
-    const completeText=await scientificEnglishPage(number);
-    if(completeText){approvedOcr.scientificText=completeText;approvedOcr.translation=completeText;}
-   }
+   // Always obtain the full saved version for the explicit reading control.
+   // A partial approved overlay is NOT a complete English page in PDF mode.
+   const completeText=await scientificEnglishPage(number);
+   if(completeText){
+    approvedOcr.scientificText=completeText;
+    approvedOcr.translation=completeText;
+    approvedOcr.readingComplete=true;
+   }else approvedOcr.readingComplete=false;
    return approvedOcr;
   }
   const geometry=await scientificGeometryPage(number);
@@ -213,7 +226,7 @@ async function render(url,title,root,token,citation=''){
   const original=rows.map(b=>String(b.original||'')).join(' ');
   return {
     scientific:true,verifiedOverlay:verified,layoutGenerated,blocks,
-    scientificText:translated,translation:translated,original
+    readingComplete:true,scientificText:translated,translation:translated,original
   };
  }
  const browserLang=(navigator.languages&&navigator.languages[0]||navigator.language||'it').toLowerCase().split('-')[0];
@@ -520,7 +533,21 @@ async function render(url,title,root,token,citation=''){
    }finally{scrollBusy=false;if(translationMode){queueVisibleTranslation();showOverlays();}if(scrollAgain){scrollAgain=false;refreshVisible();}}
   }
   viewport.addEventListener('scroll',()=>{if(!continuous)return;clearTimeout(scrollTimer);scrollTimer=setTimeout(refreshVisible,100);},{passive:true});
-  function navigate(){if(continuous){const slot=slots[page-1];if(slot)viewport.scrollTop=slot.offsetTop-stack.offsetTop;refreshVisible();}else schedule();}
+  function navigate(){
+   if(translationMode&&page!==translationActivePage){
+    readingAutoOptOut=false;
+    translationActivePage=page;
+    if(readingMode){
+     // The PDF canvas is hidden in reading mode. Switch page explicitly
+     // and fetch the saved translation instead of remaining on the old page.
+     renderReadingView();
+     readingView.scrollTop=0;
+     queueVisibleTranslation();
+    }
+   }
+   if(continuous){const slot=slots[page-1];if(slot)viewport.scrollTop=slot.offsetTop-stack.offsetTop;refreshVisible();}
+   else schedule();
+  }
   mode.onclick=()=>{
    continuous=!continuous;modeEpoch++;
    mode.setAttribute('aria-pressed',String(continuous));
@@ -963,14 +990,18 @@ async function render(url,title,root,token,citation=''){
    pt:{title:'Versão traduzida · Leitura otimizada',note:'O texto foi reorganizado para facilitar a leitura. O layout pode diferir do PDF original.',noticeTitle:'Leitura otimizada',notice:'Esta página tem um layout complexo. Mostramos uma tradução mais legível. Pode voltar ao PDF original a qualquer momento.',pdf:'Vista PDF',reading:'Leitura traduzida',back:'Voltar ao PDF',wait:'A preparar a tradução…',page:'Página',of:'de',close:'Entendi'}
   };
   const readingI18n=readingMessages[uiLang]||readingMessages.en;
-  let readingNoticeDismissed=false,readingAutoOptOut=false;
+  let readingNoticeDismissed=false,readingAutoOptOut=false,readingAutomatic=false;
+  let readingRenderedPage=0,readingRenderedEntry=null;
   function renderReadingView(){
    if(!readingMode)return;
    const number=translationActivePage||page,entry=translationCache.get(language.value+':'+number);
    const header=el('header','ires-pdf-reading-header');
    const eyebrow=el('span','ires-pdf-reading-eyebrow','IRES · READING EXPERIENCE');
    const heading=el('h2','',readingI18n.title);
-   const note=el('p','ires-pdf-reading-note',readingI18n.note);
+   const note=el('p','ires-pdf-reading-note',entry&&entry.scientific&&entry.readingComplete?
+    (uiLang==='it'?'Traduzione inglese integrale salvata. Il PDF originale rimane disponibile; la disposizione del testo può essere diversa.':
+      'Complete saved English translation. The original PDF remains available; text layout may differ.'):
+    readingI18n.note);
    const meta=el('p','',readingI18n.page+' '+number+' '+readingI18n.of+' '+doc.numPages+' · '+language.options[language.selectedIndex].text);
    const back=el('button','ires-pdf-reading-back',readingI18n.back);back.type='button';back.onclick=()=>{readingAutoOptOut=true;setReadingMode(false);};
    header.append(eyebrow,heading,note,meta,back);
@@ -1008,16 +1039,23 @@ async function render(url,title,root,token,citation=''){
     });
    }else article.append(el('p','ires-pdf-reading-wait',readingI18n.wait));
    readingView.replaceChildren(header,article);
+   readingRenderedPage=number;readingRenderedEntry=entry||null;
   }
-  function setReadingMode(enabled){
+  function setReadingMode(enabled,automatic=false){
+   const previouslyReading=readingMode;
    readingMode=Boolean(enabled&&translationMode);
+   readingAutomatic=readingMode&&automatic===true;
    readingView.hidden=!readingMode;viewport.hidden=readingMode;
    workspace.classList.toggle('ires-pdf-reading-active',readingMode);
    readingToggle.setAttribute('aria-pressed',String(readingMode));
    readingToggle.textContent=readingMode?readingI18n.pdf:readingI18n.reading;
-   if(readingMode){renderReadingView();readingView.scrollTop=0;}else showOverlays();
+   if(readingMode){renderReadingView();if(!previouslyReading)readingView.scrollTop=0;}
+   else{readingRenderedPage=0;readingRenderedEntry=null;showOverlays();}
   }
-  readingToggle.onclick=()=>setReadingMode(!readingMode);
+  readingToggle.onclick=()=>{
+   if(readingMode){readingAutoOptOut=true;setReadingMode(false);}
+   else{readingAutoOptOut=false;setReadingMode(true);}
+  };
   function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
   function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
   function showTranslationLoading(){
@@ -1174,11 +1212,22 @@ async function render(url,title,root,token,citation=''){
    });
    return nearest;
   }
+  function syncScientificReading(number,entry){
+   if(!translationMode||language.value!=='en'||visiblePageForTranslation()!==number)return;
+   const action=scientificReadingAction(entry,readingAutomatic,readingAutoOptOut);
+   if(action==='reading'){
+    if(!readingMode)setReadingMode(true,true);
+    else if(readingRenderedPage!==number||readingRenderedEntry!==entry)renderReadingView();
+    translationStatus.textContent='Pagina '+number+': traduzione inglese integrale in modalità lettura; PDF originale disponibile.';
+   }else if(action==='pdf'&&readingMode&&readingAutomatic)setReadingMode(false);
+   else if(readingMode&&(readingRenderedPage!==number||readingRenderedEntry!==entry))renderReadingView();
+  }
   function queueVisibleTranslation(){
    if(!translationMode||token!==session)return;
    const number=visiblePageForTranslation();
    translationActivePage=number;
-   if(translationCache.has(language.value+':'+number)){showOverlays();translationStatus.textContent=t(6)+' '+number;}
+   const cached=translationCache.get(language.value+':'+number);
+   if(cached){showOverlays();translationStatus.textContent=t(6)+' '+number;syncScientificReading(number,cached);}
    // Strictly one active page: never queue adjacent or previously visible pages.
    translationPending.clear();
    const key=language.value+':'+number,failed=translationFailures.get(key);
@@ -1223,12 +1272,15 @@ async function render(url,title,root,token,citation=''){
           'Pagina '+number+': testo tradotto nei blocchi del PDF':
           'Pagina '+number+': testo salvato · layout OCR da preparare o approvare');
         showOverlays();
+        syncScientificReading(number,saved);
         continue;
        }
       }
       // Existing IRES scientific translations must never silently trigger
       // new paid per-block Gemini calls when the stored version is unavailable.
       if((scientificPublicationId||scientificCandidateId||scientificBindingError)&&target==='en'){
+       // A missing saved page cannot leave an old English page on screen.
+       if(readingMode)setReadingMode(false);
        translationBusyPage=0;
        translationProgress.delete(key);
        const missing=scientificBindingError?'Il PDF aperto non corrisponde a una versione verificata della pubblicazione':'Testo inglese salvato non disponibile';
@@ -1361,7 +1413,12 @@ async function render(url,title,root,token,citation=''){
   translate.onclick=()=>setTranslationMode(!translationMode);
   translateAgain.onclick=()=>{translationCache.delete(language.value+':'+visiblePageForTranslation());translationFailures.delete(language.value+':'+visiblePageForTranslation());if(!translationMode)setTranslationMode(true);else queueVisibleTranslation();};
   overlayToggle.onclick=()=>setTranslationMode(!translationMode);
-  language.onchange=()=>{translationGeneration++;translationPending.clear();clearOverlays();if(translationMode)queueVisibleTranslation();};
+  language.onchange=()=>{
+   if(readingMode)setReadingMode(false);
+   readingAutoOptOut=false;
+   translationGeneration++;translationPending.clear();clearOverlays();
+   if(translationMode)queueVisibleTranslation();
+  };
   translationSpeak.onclick=()=>{
    if(!translatedText||!window.speechSynthesis||!window.SpeechSynthesisUtterance){translationStatus.textContent='Nessuna traduzione da leggere o voce non disponibile';return;}
    stopReading();const utterance=new SpeechSynthesisUtterance(translatedText);utterance.lang=language.value;window.speechSynthesis.speak(utterance);
