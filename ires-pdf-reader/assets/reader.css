@@ -500,3 +500,19 @@
  backdrop-filter:none!important;
 }
 
+
+
+/* 2.14.17: reading mode is a continuous document, with lazy saved English pages.
+   Keep the native browser's wheel, touch, keyboard and scroll anchoring. */
+.ires-pdf-reading-view{overflow-y:auto;scroll-behavior:auto;overflow-anchor:auto}
+.ires-pdf-reading-stack{max-width:900px;margin:20px auto 56px;display:flex;flex-direction:column;gap:22px;min-width:0}
+.ires-pdf-reading-page{min-width:0;scroll-margin-top:12px;overflow-anchor:auto}
+.ires-pdf-reading-page-label{font:700 12px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:#446678;letter-spacing:.035em;margin:0 0 8px;padding-left:6px}
+.ires-pdf-reading-page .ires-pdf-reading-article{max-width:none;border-radius:16px;border:1px solid #e1e9ed;min-height:270px;box-shadow:0 14px 35px rgba(16,41,59,.06);box-sizing:border-box}
+.ires-pdf-reading-page .ires-pdf-reading-article p:last-child{margin-bottom:0}
+.ires-pdf-reading-shared-target{background:#ffec94;color:#173548;box-shadow:0 0 0 3px #ffec94;border-radius:2px}
+.ires-pdf-reading-unavailable{font-weight:550;color:#835527!important}
+@media(max-width:720px){
+ .ires-pdf-reading-stack{gap:14px;margin-top:12px;margin-bottom:24px}
+ .ires-pdf-reading-page .ires-pdf-reading-article{border-radius:12px;padding:22px 18px;min-height:220px}
+}
