@@ -1034,6 +1034,7 @@ async function render(url,title,root,token,citation=''){
   function scientificReadingEnabled(){return !!scientificPublicationId&&language.value==='en';}
   function recordReadingPage(number){
    const n=Math.max(1,Math.min(doc.numPages,number));
+   if(page!==n){cachedSelection='';cachedPosition=null;}
    page=n;translationActivePage=n;current.value=String(n);
    bookmark.textContent=bookmarks.some(x=>x.page===n)?'★ Segnalibro':'☆ Segnalibro';
    try{localStorage.setItem(storageKey,String(n));}catch(_){}
@@ -1725,8 +1726,9 @@ async function render(url,title,root,token,citation=''){
   passage.onclick=async()=>{
    const text=selectedPassage();
    if(!text){window.alert('Seleziona prima un passaggio nel documento.');return;}
-   const position=cachedPosition||capturePosition();
+   const position=capturePosition()||cachedPosition;
    if(!position){window.alert('Non riesco a individuare la posizione della selezione. Riprova selezionando il testo.');return;}
+   cachedPosition=position;
    // Native passage store uses PDF.js text spans. Saved English reading uses
    // page + excerpt anchors, without inventing original-PDF coordinates.
    if(position.reading){await copyValue(pageUrl(text),passage);return;}
@@ -1755,6 +1757,7 @@ async function render(url,title,root,token,citation=''){
   cite.onclick=()=>{
    const selected=selectedPassage();
    const position=selected?(capturePosition()||cachedPosition):null;
+   if(position)cachedPosition=position;
    const citationPage=position&&Number.isInteger(position.page)?position.page:page;
    const quotation=selected?'“'+selected+'” ':'';
    const citationText=quotation+(citation||title+' (s.d.).')+' p. '+citationPage+'. '+pageUrl(selected);
