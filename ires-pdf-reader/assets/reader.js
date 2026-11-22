@@ -530,6 +530,7 @@ async function render(url,title,root,token,citation=''){
      if(y<bottom+viewport.clientHeight&&y+h>top-viewport.clientHeight)wanted.push(i);
      else if(slot.querySelector('canvas')){slot.querySelector('canvas').remove();const text=slot.querySelector('.ires-pdf-text-layer');if(text)text.remove();}
     }
+    if(nearest!==page&&translationMode)readingAutoOptOut=false;
     page=nearest;current.value=String(page);bookmark.textContent=bookmarks.some(x=>x.page===page)?'★ Segnalibro':'☆ Segnalibro';
     try{localStorage.setItem(storageKey,String(page));}catch(_error){}
     for(const i of wanted){
@@ -549,6 +550,13 @@ async function render(url,title,root,token,citation=''){
   }
   viewport.addEventListener('scroll',()=>{if(!continuous)return;clearTimeout(scrollTimer);scrollTimer=setTimeout(refreshVisible,100);},{passive:true});
   function navigate(){
+   if(readingMode&&scientificReadingEnabled()){
+    readingAutoOptOut=false;
+    translationActivePage=page;
+    renderScientificReadingView();
+    jumpReadingPage(page);
+    return;
+   }
    if(translationMode&&page!==translationActivePage){
     readingAutoOptOut=false;
     translationActivePage=page;
@@ -1360,6 +1368,9 @@ async function render(url,title,root,token,citation=''){
   }
   function syncScientificReading(number,entry){
    if(!translationMode||language.value!=='en'||visiblePageForTranslation()!==number)return;
+   // Once optimized reading is active it remains one scrollable document,
+   // including on pages that also offer a reviewed in-PDF overlay.
+   if(readingMode&&readingStack&&readingStack.isConnected)return;
    const action=scientificReadingAction(entry,readingAutomatic,readingAutoOptOut);
    if(action==='reading'){
     if(!readingMode)setReadingMode(true,true);
@@ -1426,7 +1437,7 @@ async function render(url,title,root,token,citation=''){
       // new paid per-block Gemini calls when the stored version is unavailable.
       if((scientificPublicationId||scientificCandidateId||scientificBindingError)&&target==='en'){
        // A missing saved page cannot leave an old English page on screen.
-       if(readingMode)setReadingMode(false);
+       if(readingMode&&!scientificReadingEnabled())setReadingMode(false);
        translationBusyPage=0;
        translationProgress.delete(key);
        const missing=scientificBindingError?'Il PDF aperto non corrisponde a una versione verificata della pubblicazione':'Testo inglese salvato non disponibile';
