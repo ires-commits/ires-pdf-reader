@@ -118,7 +118,9 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  assert.deepEqual(modeCalls,[],'Scrolling onto an approved page does not interrupt continuous English reading');
  assert.equal(js.includes("viewGroup.append(sidebarToggle,fullscreen)"),true,'Only continuous PDF display is exposed');
  assert.equal(js.includes('let continuous=true'),true,'Continuous PDF is the default');
- assert.equal(/\bmode\./.test(js),false,'Removed single-page mode does not leave orphaned control references');
+ assert.equal(js.includes('toolbar.prepend(mode,'),false,'Removed mode is not rendered in the toolbar');
+ assert.equal(js.includes('mode.textContent='),false,'No orphaned single-page mode label');
+ assert.equal(js.includes('mode.onclick='),false,'No orphaned single-page toggle handler');
  const highlight={isConnected:true,getBoundingClientRect:()=>({top:400})};
  const layer={closest:()=>({dataset:{page:'8'}}),querySelector:()=>highlight};
  const pdfViewport={scrollTop:0,getBoundingClientRect:()=>({top:100,height:800})};
