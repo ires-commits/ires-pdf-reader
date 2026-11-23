@@ -31,10 +31,20 @@ async function resolveScientificPublication(url,candidate){
 // instead of a mixed-language or unapproved PDF overlay. No AI provider calls.
 function scientificReadingAction(entry,automatic,optOut){
  if(!entry||entry.scientific!==true)return automatic?'pdf':'keep';
- if(entry.verifiedOverlay===true&&entry.partial!==true)return automatic?'pdf':'keep';
+ if(scientificPagePresentation(entry)==='overlay')return automatic?'pdf':'keep';
  const complete=entry.readingComplete===true&&typeof entry.scientificText==='string'&&!!entry.scientificText.trim();
  if(!complete)return automatic?'pdf':'keep';
  return optOut?'keep':'reading';
+}
+// Only a complete, reviewed OCR layout is safe for original-PDF English.
+// Legacy verified geometry alone is not proof that all text is covered.
+function scientificPagePresentation(entry){
+ if(entry&&entry.scientific===true&&entry.ocrOverlay===true&&
+    entry.verifiedOverlay===true&&entry.partial!==true&&
+    Array.isArray(entry.blocks)&&entry.blocks.length>0)return 'overlay';
+ if(entry&&entry.scientific===true&&entry.readingComplete===true&&
+    typeof entry.scientificText==='string'&&entry.scientificText.trim())return 'optimized';
+ return 'missing';
 }
 async function render(url,title,root,token,citation=''){
  const publicationMatch=document.body.className.match(/(?:^|\s)postid-(\d+)(?:\s|$)/);
@@ -685,7 +695,10 @@ async function render(url,title,root,token,citation=''){
    const sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.rangeCount)return null;
    const range=sel.getRangeAt(0);
    const startElement=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement;
-   const readingSection=readingMode&&startElement&&startElement.closest('.ires-pdf-reading-page');
+   // Hybrid PDF pages are not optimized articles. Keep native PDF coordinates
+   // and English OCR selections distinct from saved English paragraph links.
+   const readingSection=readingMode&&startElement&&
+    startElement.closest('.ires-pdf-reading-article')&&startElement.closest('.ires-pdf-reading-page');
    if(readingSection&&readingSection.contains(range.endContainer)){
     const article=readingSection.querySelector('.ires-pdf-reading-article');
     const parts=article?[...article.querySelectorAll('p,h3,th,td')]:[];
@@ -1090,7 +1103,9 @@ async function render(url,title,root,token,citation=''){
   function paintReadingPage(number,entry){
    const section=readingPages[number-1];if(!section)return;
    const article=section.querySelector('.ires-pdf-reading-article');if(!article)return;
+   article.hidden=false;
    article.replaceChildren();
+   section.dataset.presentation=scientificPagePresentation(entry);
    if(entry&&entry.scientific&&entry.readingComplete===true&&typeof entry.scientificText==='string'&&entry.scientificText.trim()){
     entry.scientificText.split(/\n\s*\n/).filter(Boolean).forEach(para=>article.append(el('p','',para.trim())));
     section.dataset.readingState='ready';
@@ -1113,6 +1128,89 @@ async function render(url,title,root,token,citation=''){
     article.append(original);
    }
   }
+  // Locate an English shared excerpt inside a verified OCR overlay; the
+  // paragraph/offset remains encoded in the link for optimized fallbacks.
+  function markHybridOverlayPassage(frame,number){
+   if(!linkedViewReading||number!==fromHash||!linkedText)return;
+   const needle=linkedText.trim().toLocaleLowerCase();
+   if(!needle)return;
+   for(const box of frame.querySelectorAll('.ires-pdf-translation-overlay-ocr')){
+    const text=box.textContent||'',at=text.toLocaleLowerCase().indexOf(needle);
+    if(at<0)continue;
+    const marker=el('mark','ires-pdf-reading-shared-target',text.slice(at,at+linkedText.trim().length));
+    box.replaceChildren(text.slice(0,at),marker,text.slice(at+linkedText.trim().length));
+    if(!readingLinkJumped)window.requestAnimationFrame(()=>{
+     if(!frame.isConnected||!readingMode||!marker.isConnected)return;
+     const rect=marker.getBoundingClientRect(),view=readingView.getBoundingClientRect();
+     readingView.scrollTop+=rect.top-view.top-Math.min(150,view.height*.25);
+     readingLinkJumped=true;
+    });
+    return;
+   }
+  }
+  // A reviewed OCR page retains original PDF artwork inside the same
+  // continuous English scroll as optimized pages, without retranslation.
+  async function paintHybridPdfPage(number,entry,section){
+   const original=await doc.getPage(number);
+   if(token!==session||!section.isConnected)return false;
+   const natural=original.getViewport({scale:1});
+   const available=Math.max(220,Math.min(880,(readingStack.clientWidth||880)-12));
+   const pdfScale=Math.max(.3,Math.min(1.7,available/natural.width));
+   const view=original.getViewport({scale:pdfScale});
+   const frame=el('div','ires-pdf-reading-pdf');
+   frame.dataset.page=String(number);
+   frame.style.width=view.width+'px';
+   frame.style.height=view.height+'px';
+   const canvas=el('canvas','ires-pdf-reading-pdf-canvas');
+   const pixelRatio=dpr();
+   const raster=original.getViewport({scale:pdfScale*pixelRatio});
+   canvas.width=Math.round(raster.width);canvas.height=Math.round(raster.height);
+   canvas.style.width=view.width+'px';canvas.style.height=view.height+'px';
+   frame.append(canvas);
+   const article=section.querySelector('.ires-pdf-reading-article');
+   section.querySelectorAll('.ires-pdf-reading-pdf').forEach(node=>node.remove());
+   section.append(frame);
+   article.hidden=true;
+   try{
+    await original.render({canvasContext:canvas.getContext('2d'),viewport:raster}).promise;
+    if(token!==session||!frame.isConnected)return false;
+    const {unfitted}=paintTranslationBlocks(frame,entry,number,pdfScale);
+    if(unfitted){frame.remove();article.hidden=false;return false;}
+    const layer=el('div','ires-pdf-text-layer');
+    layer.style.width=view.width+'px';layer.style.height=view.height+'px';
+    layer.style.setProperty('--scale-factor',String(pdfScale));
+    frame.append(layer);
+    try{
+     const content=await original.getTextContent();
+     if(token!==session||!frame.isConnected)return false;
+     await pdfjs.renderTextLayer({textContentSource:content,container:layer,viewport:view,textDivs:[]}).promise;
+     if(frame.isConnected)highlightText(layer);
+    }catch(error){console.warn('IRES hybrid PDF text layer',error);}
+    if(!frame.isConnected)return false;
+    markHybridOverlayPassage(frame,number);
+    section.dataset.presentation='overlay';
+    section.dataset.readingState='ready';
+    return true;
+   }catch(error){
+    console.warn('IRES hybrid PDF rendering',error);
+    frame.remove();article.hidden=false;
+    return false;
+   }
+  }
+  // Release far-away canvases while retaining page height and saved English.
+  function releaseDistantHybridPages(focal){
+   for(let i=0;i<readingPages.length;i++){
+    if(Math.abs(i+1-focal)<=3)continue;
+    const section=readingPages[i],frame=section.querySelector('.ires-pdf-reading-pdf');
+    if(!frame||section.dataset.readingState!=='ready')continue;
+    const canvas=frame.querySelector('canvas');
+    if(canvas){canvas.width=0;canvas.height=0;canvas.remove();}
+    frame.querySelectorAll('.ires-pdf-text-layer,.ires-pdf-translation-overlay,.ires-pdf-translation-mask').forEach(node=>node.remove());
+    frame.classList.add('ires-pdf-reading-pdf-unloaded');
+    frame.append(el('span','ires-pdf-reading-pdf-reload',uiLang==='it'?'Pagina PDF: scorri per caricare':'PDF page: scroll to load'));
+    section.dataset.readingState='';
+   }
+  }
   async function ensureReadingPage(number){
    if(number<1||number>doc.numPages||!scientificReadingEnabled())return;
    const section=readingPages[number-1];if(!section||section.dataset.readingState)return;
@@ -1124,7 +1222,11 @@ async function render(url,title,root,token,citation=''){
      if(!entry)entry=await scientificStoredPage(doc,number,'en');
      if(token!==session||!section.isConnected)return;
      if(entry)translationCache.set('en:'+number,entry);
-     paintReadingPage(number,entry);
+     if(scientificPagePresentation(entry)==='overlay'){
+      if(await paintHybridPdfPage(number,entry,section))return;
+      section.querySelectorAll('.ires-pdf-reading-pdf').forEach(node=>node.remove());
+     }else section.querySelectorAll('.ires-pdf-reading-pdf').forEach(node=>node.remove());
+     if(token===session&&section.isConnected)paintReadingPage(number,entry);
     }catch(_){
      if(token===session&&section.isConnected)paintReadingPage(number,null);
     }finally{readingLoads.delete(number);}
@@ -1147,6 +1249,7 @@ async function render(url,title,root,token,citation=''){
    const rect=section.getBoundingClientRect(),frame=readingView.getBoundingClientRect();
    readingView.scrollTop+=rect.top-frame.top-8;
    loadReadingVicinity(n);
+   releaseDistantHybridPages(n);
   }
   function onReadingScroll(){
    if(!readingMode||!scientificReadingEnabled()||!readingStack||!readingStack.isConnected)return;
@@ -1158,11 +1261,28 @@ async function render(url,title,root,token,citation=''){
    }
    if(seen!==page)recordReadingPage(seen);
    loadReadingVicinity(seen);
+   releaseDistantHybridPages(seen);
   }
   readingView.addEventListener('scroll',()=>{
    if(!readingMode||!scientificReadingEnabled())return;
    window.clearTimeout(readingScrollTimer);
    readingScrollTimer=window.setTimeout(onReadingScroll,80);
+  },{passive:true});
+  let hybridResizeTimer=null;
+  window.addEventListener('resize',()=>{
+   if(!readingMode||!scientificReadingEnabled()||!readingStack||!readingStack.isConnected)return;
+   clearTimeout(hybridResizeTimer);
+   hybridResizeTimer=setTimeout(()=>{
+    const target=page;
+    for(let n=Math.max(1,target-1);n<=Math.min(doc.numPages,target+1);n++){
+     const section=readingPages[n-1];
+     if(section&&section.dataset.presentation==='overlay'){
+      section.dataset.readingState='';
+      section.querySelectorAll('.ires-pdf-reading-pdf').forEach(node=>node.remove());
+     }
+    }
+    loadReadingVicinity(target);
+   },160);
   },{passive:true});
   function renderScientificReadingView(){
    if(readingStack&&readingStack.isConnected)return;
@@ -1170,8 +1290,8 @@ async function render(url,title,root,token,citation=''){
    header.append(el('span','ires-pdf-reading-eyebrow','IRES · READING EXPERIENCE'),
     el('h2','',readingI18n.title),
     el('p','ires-pdf-reading-note',uiLang==='it'?
-     'Traduzione inglese salvata · scorrimento continuo. Puoi tornare in qualsiasi momento al PDF originale.':
-     'Saved English translation · continuous reading. You can return to the original PDF at any time.'));
+     'Lettura continua: PDF originale con overlay nelle pagine verificate, testo ottimizzato nelle altre.':
+     'Continuous reading: original PDF with verified overlays, optimized English on other pages.'));
    const back=el('button','ires-pdf-reading-back',readingI18n.back);
    back.type='button';back.onclick=()=>{readingAutoOptOut=true;setReadingMode(false);};
    header.append(back);
@@ -1266,7 +1386,7 @@ async function render(url,title,root,token,citation=''){
    if(readingMode){readingAutoOptOut=true;setReadingMode(false);}
    else{readingAutoOptOut=false;setReadingMode(true);}
   };
-  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
+  function clearOverlays(){viewport.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-translation-mask,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
   function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
   function showTranslationLoading(){
    clearTranslationLoading();
@@ -1334,38 +1454,23 @@ async function render(url,title,root,token,citation=''){
    }
    holder.append(panel);
   }
-  function showOverlays(){
-   clearOverlays();clearTranslationLoading();if(!translationMode)return;
-   showTableProtection();
-   const targetPages=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
-    const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
-    return rect.bottom>v.top&&rect.top<v.bottom;
-   }).map(({n})=>n):[page];
-   for(const number of targetPages){
-    const entry=translationCache.get(language.value+':'+number);
-    if(!entry)continue;
-    const holder=continuous?slots[number-1]:singlePage;
-    if(!holder||!holder.querySelector('canvas'))continue;
-    if(entry.tableRows||(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated)){
-     pageTranslationPanel(holder,number,entry);
-     continue;
-    }
-    // Complex layouts remain inside their PDF. Exact block translations are
-    // scrollable if text expansion does not fit the original rectangle.
+  // Share the exact established OCR text/mask renderer between the PDF canvas
+  // and verified hybrid pages, reporting blocks that fail a fitting check.
+  function paintTranslationBlocks(holder,entry,number,displayScale){
     let fitted=0,unfitted=0;
     for(const block of entry.blocks){
      const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
      if(entry.ocrOverlay)node.classList.add('ires-pdf-translation-overlay-ocr');
      if(entry.ocrOverlay)node.dataset.kind=block.kind||'paragraph';
      if(entry.ocrOverlay&&block.maskMode==='source-only')node.dataset.maskMode='source-only';
-     node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
-     node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
+     node.style.left=block.x*displayScale+'px';node.style.top=block.y*displayScale+'px';
+     node.style.width=block.width*displayScale+'px';node.style.height=block.height*displayScale+'px';
      node.style.overflow=entry.ocrOverlay?'hidden':'auto';
      // OCR follows PDF zoom (unlike UI text). A 19px cap made 28pt
      // chapter titles unreadably tiny at 150-200% zoom.
      const initialFont=entry.ocrOverlay?
-       Math.max(5.5,Math.min(72,block.fontSize*scale)):
-       Math.max(9,Math.min(17,block.fontSize*scale));
+       Math.max(5.5,Math.min(72,block.fontSize*displayScale)):
+       Math.max(9,Math.min(17,block.fontSize*displayScale));
      node.style.fontSize=initialFont+'px';
      // These values arrive only after server and Reader whitelist checks.
      // Existing stylesheet marks legacy ink/weight !important.
@@ -1390,16 +1495,37 @@ async function render(url,title,root,token,citation=''){
       // text has fitted. If it fails, the original PDF stays fully visible.
       if(entry.ocrOverlay&&block.maskRect){
        const mask=el('div','ires-pdf-translation-mask');
-       mask.style.left=block.maskRect.x*scale+'px';
-       mask.style.top=block.maskRect.y*scale+'px';
-       mask.style.width=block.maskRect.width*scale+'px';
-       mask.style.height=block.maskRect.height*scale+'px';
+       mask.style.left=block.maskRect.x*displayScale+'px';
+       mask.style.top=block.maskRect.y*displayScale+'px';
+       mask.style.width=block.maskRect.width*displayScale+'px';
+       mask.style.height=block.maskRect.height*displayScale+'px';
        if(block.maskFill)mask.style.setProperty('background',block.maskFill,'important');
        holder.append(mask);
       }
       fitted++;
      }
     }
+   return {fitted,unfitted};
+  }
+  function showOverlays(){
+   clearOverlays();clearTranslationLoading();if(!translationMode)return;
+   showTableProtection();
+   const targetPages=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
+    const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
+    return rect.bottom>v.top&&rect.top<v.bottom;
+   }).map(({n})=>n):[page];
+   for(const number of targetPages){
+    const entry=translationCache.get(language.value+':'+number);
+    if(!entry)continue;
+    const holder=continuous?slots[number-1]:singlePage;
+    if(!holder||!holder.querySelector('canvas'))continue;
+    if(entry.tableRows||(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated)){
+     pageTranslationPanel(holder,number,entry);
+     continue;
+    }
+    // Complex layouts remain inside their PDF. Exact block translations are
+    // scrollable if text expansion does not fit the original rectangle.
+    const {fitted,unfitted}=paintTranslationBlocks(holder,entry,number,scale);
     if(entry.ocrOverlay&&number===visiblePageForTranslation()){
      translationStatus.textContent='Overlay OCR pagina '+number+': '+fitted+'/'+entry.blocks.length+
       ' blocchi inglesi'+(entry.partial?' · layout parziale ('+entry.blocks.length+' di '+entry.sourceBlocks+' blocchi)':'')+
@@ -1730,7 +1856,9 @@ async function render(url,title,root,token,citation=''){
    link.searchParams.set('ires_pdf_auto','1');
    const position=text?cachedPosition:null;
    const targetPage=position&&Number.isInteger(position.page)?position.page:page;
-   const englishReading=scientificReadingEnabled()&&(readingMode||Boolean(position&&position.reading));
+   const nativePdfSelection=!!(position&&!position.reading&&Array.isArray(position.start)&&Array.isArray(position.end));
+   const englishReading=scientificReadingEnabled()&&!nativePdfSelection&&
+    (readingMode||Boolean(position&&position.reading));
    link.hash='page='+encodeURIComponent(targetPage)+(text?'&text='+encodeURIComponent(text):'');
    // Existing #page/#text/#start/#end PDF text links remain compatible.
    if(englishReading)link.hash+='&view=reading&lang=en';

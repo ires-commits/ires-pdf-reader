@@ -51,7 +51,7 @@ async function load(data){
  assert.equal(await load(invalidColor),null,'Unsafe CSS color must be rejected');
  const invalidWeight=base();invalidWeight.blocks[0].fontWeight=999;
  assert.equal(await load(invalidWeight),null,'Unsupported weight must be rejected');
- assert.ok(source.includes('Math.min(72,block.fontSize*scale)'),
+ assert.ok(source.includes('Math.min(72,block.fontSize*displayScale)'),
   'OCR font ceiling must scale with source PDF at high zoom');
  assert.ok(source.includes("node.style.setProperty('color',block.textColor,'important')"),
   'Per-block approved colors must override legacy OCR defaults');

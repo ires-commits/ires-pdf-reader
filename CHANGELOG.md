@@ -1,3 +1,11 @@
+## 2.14.18 — Lettura scientifica ibrida, pagina per pagina
+
+- Unifica in un unico scorrimento verticale il PDF originale con overlay OCR inglese completo e approvato e la lettura inglese ottimizzata delle pagine senza overlay completo.
+- Il Reader decide la presentazione per ciascuna pagina verificata: overlay OCR con geometria confermata, altrimenti traduzione inglese integrale già salvata; una geometria indicativa non viene trattata come approvazione.
+- Riutilizza il renderer OCR esistente per maschere e fitting. Se un blocco non entra nell'area approvata, ripiega sulla traduzione integrale salvata invece di mostrare un overlay incompleto.
+- Carica in prossimità dello scorrimento e libera i canvas PDF lontani, conservando la posizione della pagina. La vista continua mantiene navigazione, selezioni, link e citazioni.
+- Nessuna nuova chiamata AI, modifica delle traduzioni, approvazione automatica o incremento del budget.
+
 ## 2.14.17 — Scorrimento continuo e link precisi nelle traduzioni
 
 - Il Reader PDF usa esclusivamente lo scorrimento continuo: rimosso il pulsante «Singola», con navigazione nativa tramite rotellina, tocco, tastiera e i comandi precedente/successiva.
