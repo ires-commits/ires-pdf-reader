@@ -19,7 +19,7 @@ def source_functions(source):
     return (
         part("async function scientificApprovedOcr(doc,number){",
              "async function scientificStoredPage("),
-        part("function showOverlays(){","function visiblePageForTranslation(){")
+        part("function paintTranslationBlocks(","function visiblePageForTranslation(){")
     )
 
 def record(legacy=False,reviewed=True):
