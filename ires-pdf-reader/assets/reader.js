@@ -31,10 +31,20 @@ async function resolveScientificPublication(url,candidate){
 // instead of a mixed-language or unapproved PDF overlay. No AI provider calls.
 function scientificReadingAction(entry,automatic,optOut){
  if(!entry||entry.scientific!==true)return automatic?'pdf':'keep';
- if(entry.verifiedOverlay===true&&entry.partial!==true)return automatic?'pdf':'keep';
+ if(scientificPagePresentation(entry)==='overlay')return automatic?'pdf':'keep';
  const complete=entry.readingComplete===true&&typeof entry.scientificText==='string'&&!!entry.scientificText.trim();
  if(!complete)return automatic?'pdf':'keep';
  return optOut?'keep':'reading';
+}
+// Only a complete, reviewed OCR layout is safe for original-PDF English.
+// Legacy verified geometry alone is not proof that all text is covered.
+function scientificPagePresentation(entry){
+ if(entry&&entry.scientific===true&&entry.ocrOverlay===true&&
+    entry.verifiedOverlay===true&&entry.partial!==true&&
+    Array.isArray(entry.blocks)&&entry.blocks.length>0)return 'overlay';
+ if(entry&&entry.scientific===true&&entry.readingComplete===true&&
+    typeof entry.scientificText==='string'&&entry.scientificText.trim())return 'optimized';
+ return 'missing';
 }
 async function render(url,title,root,token,citation=''){
  const publicationMatch=document.body.className.match(/(?:^|\s)postid-(\d+)(?:\s|$)/);
@@ -685,7 +695,10 @@ async function render(url,title,root,token,citation=''){
    const sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.rangeCount)return null;
    const range=sel.getRangeAt(0);
    const startElement=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement;
-   const readingSection=readingMode&&startElement&&startElement.closest('.ires-pdf-reading-page');
+   // Hybrid PDF pages are not optimized articles. Keep native PDF coordinates
+   // and English OCR selections distinct from saved English paragraph links.
+   const readingSection=readingMode&&startElement&&
+    startElement.closest('.ires-pdf-reading-article')&&startElement.closest('.ires-pdf-reading-page');
    if(readingSection&&readingSection.contains(range.endContainer)){
     const article=readingSection.querySelector('.ires-pdf-reading-article');
     const parts=article?[...article.querySelectorAll('p,h3,th,td')]:[];
@@ -1266,7 +1279,7 @@ async function render(url,title,root,token,citation=''){
    if(readingMode){readingAutoOptOut=true;setReadingMode(false);}
    else{readingAutoOptOut=false;setReadingMode(true);}
   };
-  function clearOverlays(){root.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
+  function clearOverlays(){viewport.querySelectorAll('.ires-pdf-translation-overlay,.ires-pdf-translation-mask,.ires-pdf-page-translation-overlay,.ires-pdf-page-translation-prompt').forEach(node=>node.remove());}
   function clearTranslationLoading(){root.querySelectorAll('.ires-pdf-translation-loading').forEach(node=>node.remove());}
   function showTranslationLoading(){
    clearTranslationLoading();
@@ -1334,38 +1347,23 @@ async function render(url,title,root,token,citation=''){
    }
    holder.append(panel);
   }
-  function showOverlays(){
-   clearOverlays();clearTranslationLoading();if(!translationMode)return;
-   showTableProtection();
-   const targetPages=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
-    const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
-    return rect.bottom>v.top&&rect.top<v.bottom;
-   }).map(({n})=>n):[page];
-   for(const number of targetPages){
-    const entry=translationCache.get(language.value+':'+number);
-    if(!entry)continue;
-    const holder=continuous?slots[number-1]:singlePage;
-    if(!holder||!holder.querySelector('canvas'))continue;
-    if(entry.tableRows||(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated)){
-     pageTranslationPanel(holder,number,entry);
-     continue;
-    }
-    // Complex layouts remain inside their PDF. Exact block translations are
-    // scrollable if text expansion does not fit the original rectangle.
+  // Share the exact established OCR text/mask renderer between the PDF canvas
+  // and verified hybrid pages, reporting blocks that fail a fitting check.
+  function paintTranslationBlocks(holder,entry,number,displayScale){
     let fitted=0,unfitted=0;
     for(const block of entry.blocks){
      const node=el('div','ires-pdf-translation-overlay',cleanTranslatedText(block.translation));
      if(entry.ocrOverlay)node.classList.add('ires-pdf-translation-overlay-ocr');
      if(entry.ocrOverlay)node.dataset.kind=block.kind||'paragraph';
      if(entry.ocrOverlay&&block.maskMode==='source-only')node.dataset.maskMode='source-only';
-     node.style.left=block.x*scale+'px';node.style.top=block.y*scale+'px';
-     node.style.width=block.width*scale+'px';node.style.height=block.height*scale+'px';
+     node.style.left=block.x*displayScale+'px';node.style.top=block.y*displayScale+'px';
+     node.style.width=block.width*displayScale+'px';node.style.height=block.height*displayScale+'px';
      node.style.overflow=entry.ocrOverlay?'hidden':'auto';
      // OCR follows PDF zoom (unlike UI text). A 19px cap made 28pt
      // chapter titles unreadably tiny at 150-200% zoom.
      const initialFont=entry.ocrOverlay?
-       Math.max(5.5,Math.min(72,block.fontSize*scale)):
-       Math.max(9,Math.min(17,block.fontSize*scale));
+       Math.max(5.5,Math.min(72,block.fontSize*displayScale)):
+       Math.max(9,Math.min(17,block.fontSize*displayScale));
      node.style.fontSize=initialFont+'px';
      // These values arrive only after server and Reader whitelist checks.
      // Existing stylesheet marks legacy ink/weight !important.
@@ -1390,16 +1388,37 @@ async function render(url,title,root,token,citation=''){
       // text has fitted. If it fails, the original PDF stays fully visible.
       if(entry.ocrOverlay&&block.maskRect){
        const mask=el('div','ires-pdf-translation-mask');
-       mask.style.left=block.maskRect.x*scale+'px';
-       mask.style.top=block.maskRect.y*scale+'px';
-       mask.style.width=block.maskRect.width*scale+'px';
-       mask.style.height=block.maskRect.height*scale+'px';
+       mask.style.left=block.maskRect.x*displayScale+'px';
+       mask.style.top=block.maskRect.y*displayScale+'px';
+       mask.style.width=block.maskRect.width*displayScale+'px';
+       mask.style.height=block.maskRect.height*displayScale+'px';
        if(block.maskFill)mask.style.setProperty('background',block.maskFill,'important');
        holder.append(mask);
       }
       fitted++;
      }
     }
+   return {fitted,unfitted};
+  }
+  function showOverlays(){
+   clearOverlays();clearTranslationLoading();if(!translationMode)return;
+   showTableProtection();
+   const targetPages=continuous?slots.map((slot,i)=>({slot,n:i+1})).filter(({slot})=>{
+    const rect=slot.getBoundingClientRect(),v=viewport.getBoundingClientRect();
+    return rect.bottom>v.top&&rect.top<v.bottom;
+   }).map(({n})=>n):[page];
+   for(const number of targetPages){
+    const entry=translationCache.get(language.value+':'+number);
+    if(!entry)continue;
+    const holder=continuous?slots[number-1]:singlePage;
+    if(!holder||!holder.querySelector('canvas'))continue;
+    if(entry.tableRows||(entry.scientific&&!entry.verifiedOverlay&&!entry.layoutGenerated)){
+     pageTranslationPanel(holder,number,entry);
+     continue;
+    }
+    // Complex layouts remain inside their PDF. Exact block translations are
+    // scrollable if text expansion does not fit the original rectangle.
+    const {fitted,unfitted}=paintTranslationBlocks(holder,entry,number,scale);
     if(entry.ocrOverlay&&number===visiblePageForTranslation()){
      translationStatus.textContent='Overlay OCR pagina '+number+': '+fitted+'/'+entry.blocks.length+
       ' blocchi inglesi'+(entry.partial?' · layout parziale ('+entry.blocks.length+' di '+entry.sourceBlocks+' blocchi)':'')+
@@ -1730,7 +1749,9 @@ async function render(url,title,root,token,citation=''){
    link.searchParams.set('ires_pdf_auto','1');
    const position=text?cachedPosition:null;
    const targetPage=position&&Number.isInteger(position.page)?position.page:page;
-   const englishReading=scientificReadingEnabled()&&(readingMode||Boolean(position&&position.reading));
+   const nativePdfSelection=!!(position&&!position.reading&&Array.isArray(position.start)&&Array.isArray(position.end));
+   const englishReading=scientificReadingEnabled()&&!nativePdfSelection&&
+    (readingMode||Boolean(position&&position.reading));
    link.hash='page='+encodeURIComponent(targetPage)+(text?'&text='+encodeURIComponent(text):'');
    // Existing #page/#text/#start/#end PDF text links remain compatible.
    if(englishReading)link.hash+='&view=reading&lang=en';
