@@ -90,8 +90,11 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  const unapproved={scientific:true,verifiedOverlay:false,readingComplete:true,scientificText:translation.translation};
  assert.equal(decision(unapproved),'reading','Unapproved pages automatically show full English text');
  assert.equal(decision({...unapproved,verifiedOverlay:true,partial:true}),'reading','Partial overlays never mix Italian and English in automatic reading');
- assert.equal(decision({...unapproved,verifiedOverlay:true,partial:false}),'keep','Complete approved overlay stays inside PDF');
- assert.equal(decision({...unapproved,verifiedOverlay:true,partial:false},true),'pdf','Auto reading returns to PDF when a fully approved page is reached');
+  const approved={...unapproved,ocrOverlay:true,verifiedOverlay:true,partial:false,blocks:[{translation:'English text'}]};
+  assert.equal(decision(approved),'keep','Only fully reviewed OCR stays on original PDF');
+  assert.equal(decision({...approved,partial:true}),'reading','Partial OCR is optimized');
+  assert.equal(decision({...approved,ocrOverlay:false}),'reading','Unreviewed geometry is optimized');
+  assert.equal(decision(approved,true),'pdf','Reviewed OCR returns to PDF');
  assert.equal(decision(unapproved,false,true),'keep','A user can opt out of automatic reading on the current page');
  assert.equal(decision({...unapproved,readingComplete:false}),'keep','Truncated English is never presented as a full translation');
  assert.equal(decision(null,true),'pdf','Missing source returns to original PDF');
@@ -113,9 +116,9 @@ function node(tag,cls,text){return {tag,cls,text,children:[],attrs:{},setAttribu
  assert.deepEqual(modeCalls,[[true,true]],'Full saved English automatically opens in optimized reading view');
  modeCalls=[];
  Object.assign(syncEnvironment,{readingMode:true,readingAutomatic:true,readingStack:{isConnected:true},
-  entry:{...unapproved,verifiedOverlay:true,partial:false}});
+   entry:approved});
  vm.runInNewContext(readingPolicy+readingSync+';syncScientificReading(8,entry)',syncEnvironment);
- assert.deepEqual(modeCalls,[],'Scrolling onto an approved page does not interrupt continuous English reading');
+  assert.deepEqual(modeCalls,[],'Approved and optimized pages share a single scroll container');
  assert.equal(js.includes("viewGroup.append(sidebarToggle,fullscreen)"),true,'Only continuous PDF display is exposed');
  assert.equal(js.includes('let continuous=true'),true,'Continuous PDF is the default');
  assert.equal(js.includes('toolbar.prepend(mode,'),false,'Removed mode is not rendered in the toolbar');
