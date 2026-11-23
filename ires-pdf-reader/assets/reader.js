@@ -1128,6 +1128,26 @@ async function render(url,title,root,token,citation=''){
     article.append(original);
    }
   }
+  // Locate an English shared excerpt inside a verified OCR overlay; the
+  // paragraph/offset remains encoded in the link for optimized fallbacks.
+  function markHybridOverlayPassage(frame,number){
+   if(!linkedViewReading||number!==fromHash||!linkedText)return;
+   const needle=linkedText.trim().toLocaleLowerCase();
+   if(!needle)return;
+   for(const box of frame.querySelectorAll('.ires-pdf-translation-overlay-ocr')){
+    const text=box.textContent||'',at=text.toLocaleLowerCase().indexOf(needle);
+    if(at<0)continue;
+    const marker=el('mark','ires-pdf-reading-shared-target',text.slice(at,at+linkedText.trim().length));
+    box.replaceChildren(text.slice(0,at),marker,text.slice(at+linkedText.trim().length));
+    if(!readingLinkJumped)window.requestAnimationFrame(()=>{
+     if(!frame.isConnected||!readingMode||!marker.isConnected)return;
+     const rect=marker.getBoundingClientRect(),view=readingView.getBoundingClientRect();
+     readingView.scrollTop+=rect.top-view.top-Math.min(150,view.height*.25);
+     readingLinkJumped=true;
+    });
+    return;
+   }
+  }
   // A reviewed OCR page retains original PDF artwork inside the same
   // continuous English scroll as optimized pages, without retranslation.
   async function paintHybridPdfPage(number,entry,section){
@@ -1167,6 +1187,7 @@ async function render(url,title,root,token,citation=''){
      if(frame.isConnected)highlightText(layer);
     }catch(error){console.warn('IRES hybrid PDF text layer',error);}
     if(!frame.isConnected)return false;
+    markHybridOverlayPassage(frame,number);
     section.dataset.presentation='overlay';
     section.dataset.readingState='ready';
     return true;
